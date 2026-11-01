@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gameConfig>
+
+    <world seed="123456789" />
+
+    <terrain
+        chunkSize="64"
+        subdivisions="32"
+        renderDistance="8"
+        maxChunksPerFrame="8"
+    />
+
+    <camera
+        speed="35.0"
+        farPlane="1200.0"
+    />
+
+    <graphics
+        width="1280"
+        height="720"
+        vsync="true"
+        gammaCorrection="true"
+        fpsLimit="60"
+    />
+
+    <water
+        height="0.0"
+        transparency="0.05"
+        waveSpeed="0.6"
+        waveScale="0.004"
+        maxAmplitude="0.8"
+        reflectionMapSize="512"
+    />
+
+    <lighting
+        sunIntensity="1.5"
+    />
+
+</gameConfig>
