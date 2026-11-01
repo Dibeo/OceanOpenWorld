@@ -12,6 +12,7 @@ public final class LightingManager {
     private final ColorRGBA baseSunColor = new ColorRGBA(1f, 0.95f, 0.82f, 1f);
     private DirectionalLight sun;
     private AmbientLight ambient;
+    private int sunVersion;
 
     public LightingManager(Node scene) {
         this.scene = scene;
@@ -26,7 +27,9 @@ public final class LightingManager {
         setSunIntensity(intensity);
 
         ambient = new AmbientLight();
-        ambient.setColor(new ColorRGBA(0.4f, 0.5f, 0.65f, 1f));
+        // Ambiant neutre-chaud (lumière rebondie par le sable) : un ambiant bleu ciel
+        // multiplié par un sable jaune donne des ombres grises/bleutées.
+        ambient.setColor(new ColorRGBA(0.42f, 0.40f, 0.36f, 1f));
         scene.addLight(ambient);
     }
 
@@ -36,6 +39,7 @@ public final class LightingManager {
             throw new IllegalArgumentException("La direction du soleil doit être non nulle.");
         }
         sun.setDirection(direction.normalize()); // ne modifie pas le vecteur fourni
+        sunVersion++;
     }
 
     public void setSunIntensity(float intensity) {
@@ -46,10 +50,17 @@ public final class LightingManager {
         sun.setColor(baseSunColor.mult(intensity));
     }
 
+    /** Copie défensive de la direction des rayons. */
     public Vector3f getSunDirection() {
         ensureInitialized();
         return sun.getDirection().clone();
     }
+
+    /**
+     * Incrémenté à chaque changement de direction : permet au ciel de détecter
+     * un changement sans allouer ni comparer de vecteurs à chaque frame.
+     */
+    public int getSunVersion() { return sunVersion; }
 
     /** Couleur réellement émise, intensité comprise : utile à WaterFilter. */
     public ColorRGBA getSunColor() {
@@ -60,6 +71,11 @@ public final class LightingManager {
     public DirectionalLight getSun() {
         ensureInitialized();
         return sun;
+    }
+
+    public void cleanup() {
+        if (sun != null) { scene.removeLight(sun); sun = null; }
+        if (ambient != null) { scene.removeLight(ambient); ambient = null; }
     }
 
     private void ensureInitialized() {

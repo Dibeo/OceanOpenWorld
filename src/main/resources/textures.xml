@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Définition des textures procédurales. Placer ce fichier dans src/main/resources/.
+  Les textures sont générées à partir de la seed du monde (world.seed de config.xml) :
+  même seed = mêmes textures. Toutes les textures sont sans couture (tileables).
+
+  <texture name size tileMeters>
+    size       : côté en pixels, puissance de 2 (16..1024)
+    tileMeters : taille réelle (mètres) d'une répétition sur le terrain
+  <diffuse base contrast r g b>   multiplicateur de luminosité (la teinte vient des couleurs de sommets)
+      valeur = base + contrast * somme(layers), puis multiplié par (r,g,b)
+  <normal strength>               normal map déduite de la somme des layers
+  <layer type=...> types :
+      perlin : cells (cellules sur la texture, 1..256), octaves (1..8), persistence, amplitude
+               contrainte : cells * 2^(octaves-1) <= 256
+      ripple : frequency (rides entières sur la texture), warpCells, warpAmount, amplitude
+      grain  : amplitude (bruit blanc par pixel)
+-->
+<textures>
+  <texture name="sand" size="256" tileMeters="4">
+    <diffuse base="0.92" contrast="1.0" r="1" g="1" b="1">
+      <layer type="perlin" cells="32" octaves="1" amplitude="0.04"/>
+      <layer type="perlin" cells="96" octaves="1" amplitude="0.04"/>
+      <layer type="grain" amplitude="0.05"/>
+    </diffuse>
+    <normal strength="6">
+      <layer type="ripple" frequency="6" warpCells="4" warpAmount="0.35" amplitude="0.35"/>
+      <layer type="perlin" cells="64" octaves="2" persistence="0.5" amplitude="0.49"/>
+    </normal>
+  </texture>
+</textures>

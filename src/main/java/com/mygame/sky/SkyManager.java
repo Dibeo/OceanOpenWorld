@@ -10,6 +10,7 @@ import com.jme3.renderer.queue.RenderQueue;
 import com.jme3.scene.Geometry;
 import com.jme3.scene.Mesh;
 import com.jme3.scene.Node;
+import com.jme3.scene.Spatial;
 import com.jme3.scene.VertexBuffer;
 import com.jme3.scene.shape.Sphere;
 import com.mygame.lighting.LightingManager;
@@ -18,8 +19,7 @@ import java.nio.FloatBuffer;
 
 /** Apparence du ciel : ne possède pas de direction solaire indépendante. */
 public final class SkyManager {
-    private static final float SKY_RADIUS = 450f;
-    private static final float SUN_DISTANCE = 350f;
+    private static final float MAX_SKY_RADIUS = 450f;
     private static final float SUN_RADIUS = 14f;
 
     private final Node scene;
@@ -29,11 +29,12 @@ public final class SkyManager {
     private final Node skyNode = new Node("Sky");
 
     private Geometry sunGeometry;
-    private final Vector3f lastSunDirection = new Vector3f(Float.NaN, Float.NaN, Float.NaN);
+    private float skyRadius;
+    private float sunDistance;
+    private int lastSunVersion = -1;
     private boolean initialized;
 
-    public SkyManager(Node scene, AssetManager assets, Camera camera,
-                      LightingManager lighting) {
+    public SkyManager(Node scene, AssetManager assets, Camera camera, LightingManager lighting) {
         this.scene = scene;
         this.assets = assets;
         this.camera = camera;
@@ -43,7 +44,14 @@ public final class SkyManager {
     public void initialize() {
         if (initialized) return;
 
-        Sphere sphere = new Sphere(48, 96, SKY_RADIUS);
+        // Le dôme ne doit pas dépasser le far plane, sinon il serait coupé par le frustum.
+        skyRadius = Math.min(MAX_SKY_RADIUS, camera.getFrustumFar() * 0.9f);
+        sunDistance = skyRadius * 0.78f;
+
+        Sphere sphere = new Sphere(32, 64, skyRadius);
+        // Unshaded + VertexColor n'a besoin ni de normales ni de coordonnées de texture.
+        sphere.clearBuffer(VertexBuffer.Type.Normal);
+        sphere.clearBuffer(VertexBuffer.Type.TexCoord);
         addGradient(sphere);
 
         Geometry sky = new Geometry("SkyGradient", sphere);
@@ -51,19 +59,24 @@ public final class SkyManager {
         skyMaterial.setBoolean("VertexColor", true);
         skyMaterial.getAdditionalRenderState().setFaceCullMode(RenderState.FaceCullMode.Off);
         skyMaterial.getAdditionalRenderState().setDepthWrite(false);
-        skyMaterial.getAdditionalRenderState().setDepthTest(false);
+        // Le bucket Sky est dessiné APRÈS l'opaque, avec une profondeur fixée à 1 :
+        // le test de profondeur doit rester actif, sinon le dôme recouvre le terrain.
+        skyMaterial.getAdditionalRenderState().setDepthTest(true);
         sky.setMaterial(skyMaterial);
         sky.setQueueBucket(RenderQueue.Bucket.Sky);
+        sky.setCullHint(Spatial.CullHint.Never);
         skyNode.attachChild(sky);
 
-        sunGeometry = new Geometry("Sun", new Sphere(24, 48, SUN_RADIUS));
+        Sphere sunSphere = new Sphere(16, 32, SUN_RADIUS);
+        sunSphere.clearBuffer(VertexBuffer.Type.Normal);
+        sunSphere.clearBuffer(VertexBuffer.Type.TexCoord);
+        sunGeometry = new Geometry("Sun", sunSphere);
         Material sunMaterial = new Material(assets, "Common/MatDefs/Misc/Unshaded.j3md");
         sunMaterial.setColor("Color", new ColorRGBA(1f, 0.96f, 0.75f, 1f));
         sunMaterial.getAdditionalRenderState().setDepthWrite(false);
         // Le soleil doit être masqué par un objet opaque situé devant lui.
         sunMaterial.getAdditionalRenderState().setDepthTest(true);
         sunGeometry.setMaterial(sunMaterial);
-        // Dessiné après le ciel et la géométrie opaque, avec test de profondeur.
         sunGeometry.setQueueBucket(RenderQueue.Bucket.Transparent);
         skyNode.attachChild(sunGeometry);
 
@@ -74,14 +87,16 @@ public final class SkyManager {
 
     private void addGradient(Mesh mesh) {
         FloatBuffer positions = mesh.getFloatBuffer(VertexBuffer.Type.Position);
-        float[] colors = new float[mesh.getVertexCount() * 4];
+        int count = mesh.getVertexCount();
+        float[] colors = new float[count * 4];
         ColorRGBA horizon = new ColorRGBA(0.72f, 0.85f, 0.96f, 1f);
         ColorRGBA zenith = new ColorRGBA(0.08f, 0.34f, 0.78f, 1f);
         ColorRGBA lower = new ColorRGBA(0.27f, 0.43f, 0.60f, 1f);
+        ColorRGBA c = new ColorRGBA();
 
-        for (int i = 0; i < mesh.getVertexCount(); i++) {
-            float y = positions.get(i * 3 + 1) / SKY_RADIUS;
-            ColorRGBA c = horizon.clone();
+        for (int i = 0; i < count; i++) {
+            float y = positions.get(i * 3 + 1) / skyRadius;
+            c.set(horizon);
             if (y >= 0f) {
                 c.interpolateLocal(zenith, (float) Math.pow(y, 0.55));
             } else {
@@ -101,13 +116,19 @@ public final class SkyManager {
         if (!initialized) return;
         skyNode.setLocalTranslation(camera.getLocation());
 
-        Vector3f current = lighting.getSunDirection();
-        if (!current.equals(lastSunDirection)) {
+        int version = lighting.getSunVersion();
+        if (version != lastSunVersion) {
             // Le vecteur de la lumière indique où vont les rayons ;
-            // le soleil visible doit se trouver dans la direction opposée.
-            sunGeometry.setLocalTranslation(current.negate().mult(SUN_DISTANCE));
-            lastSunDirection.set(current);
+            // le soleil visible se trouve dans la direction opposée.
+            Vector3f d = lighting.getSun().getDirection(); // référence interne, aucune allocation
+            sunGeometry.setLocalTranslation(-d.x * sunDistance, -d.y * sunDistance, -d.z * sunDistance);
+            lastSunVersion = version;
         }
+    }
+
+    public void cleanup() {
+        skyNode.removeFromParent();
+        initialized = false;
     }
 
     public Node getSkyNode() {
