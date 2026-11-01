@@ -17,7 +17,7 @@ public class Main extends SimpleApplication {
     private WorldScene worldScene;
 
     public Main(GameConfig config) {
-        super(); // pas d'AppStates par défaut inutiles : on garde seulement ceux de SimpleApplication
+        super();
         this.config = config;
     }
 

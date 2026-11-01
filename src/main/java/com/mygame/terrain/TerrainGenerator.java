@@ -4,6 +4,8 @@ import com.mygame.noise.PerlinNoise;
 
 /** Générateur de hauteurs. Immuable après construction : utilisable depuis plusieurs threads. */
 public final class TerrainGenerator {
+    private static final double ISLAND_FREQUENCY = .0035;
+
     private final PerlinNoise continental, islands, details, dunes, warp, tint;
 
     public TerrainGenerator(long seed) {
@@ -20,7 +22,7 @@ public final class TerrainGenerator {
         double dz = warp.fractal((x+8451)*.0018,(z-3421)*.0018,3,.5,2)*55;
         double wx = x+dx, wz = z+dz;
         double continent = continental.fractal(wx*.0015,wz*.0015,4,.5,2);
-        double island = islands.fractal(wx*.006,wz*.006,5,.5,2);
+        double island = islands.fractal(wx*ISLAND_FREQUENCY,wz*ISLAND_FREQUENCY,5,.5,2);
         double h = -5+continent*17+island*19;
         double landFactor = smoothstep(-2,8,h);
         h += details.fractal(wx*.022,wz*.022,4,.48,2)*(1.5+landFactor*3.5);
@@ -39,6 +41,10 @@ public final class TerrainGenerator {
     /** Variation de teinte à grande échelle (-1..1 environ) pour casser l'uniformité du sable. */
     public float getTint(double x, double z) {
         return (float) tint.fractal(x*.004, z*.004, 2, .5, 2);
+    }
+
+    static double islandFrequency() {
+        return ISLAND_FREQUENCY;
     }
 
     private static double smoothstep(double min,double max,double v) {

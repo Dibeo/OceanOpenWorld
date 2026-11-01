@@ -26,7 +26,7 @@ import java.util.logging.Logger;
 
 /**
  * Charge les chunks proches et détache ceux qui sortent du rayon.
- * Le calcul lourd (bruit, normales, couleurs) se fait sur des threads de fond ;
+ * Le calcul lourd (bruit, normales, poids de textures) se fait sur des threads de fond ;
  * seul l'assemblage du Mesh et l'attachement au scene graph ont lieu sur le thread de rendu,
  * au maximum {@code maxChunksPerFrame} par frame.
  */
@@ -41,7 +41,6 @@ public final class ChunkLoader {
     }
 
     private final int renderDistance, maxNewChunksPerFrame, maxInFlight;
-    private final float tileMeters;
     private final GameConfig config;
     private final Node terrainNode;
     private final Camera camera;
@@ -54,7 +53,6 @@ public final class ChunkLoader {
     private final Set<Long> pending = new HashSet<>();
     private final Queue<Long> requestQueue = new ArrayDeque<>();
     private TerrainGenerator generator;
-    private long seed;
     private int generation;
     private boolean dirty = true;
     private int lastCx, lastCz;
@@ -62,19 +60,15 @@ public final class ChunkLoader {
     private final ConcurrentLinkedQueue<Result> ready = new ConcurrentLinkedQueue<>();
 
     public ChunkLoader(Node terrainNode, Camera camera, Material material,
-                       TerrainGenerator generator, long seed, GameConfig config,
-                       float tileMeters) {
-        this.tileMeters = tileMeters;
+                       TerrainGenerator generator, GameConfig config) {
         this.terrainNode = terrainNode;
         this.camera = camera;
         this.material = material;
         this.generator = generator;
-        this.seed = seed;
         this.config = config;
         this.renderDistance = config.renderDistance;
         this.maxNewChunksPerFrame = config.maxChunksPerFrame;
         this.sharedIndices = TerrainChunk.createIndexBuffer(config.subdivisions);
-
         int threads = Math.max(1, Runtime.getRuntime().availableProcessors() - 2);
         this.maxInFlight = Math.max(maxNewChunksPerFrame, threads * 2);
         final AtomicInteger n = new AtomicInteger();
@@ -164,15 +158,13 @@ public final class ChunkLoader {
             pending.add(key);
             final int gen = generation;
             final TerrainGenerator gen3d = generator;
-            final long s = seed;
             final int x = unpackX(key), z = unpackZ(key);
             final int size = config.chunkSize, sub = config.subdivisions;
             final float waterH = config.waterHeight;
-            final float tile = tileMeters;
             executor.execute(() -> {
                 TerrainChunk.Data data = null;
                 try {
-                    data = TerrainChunk.generate(x, z, gen3d, s, size, sub, waterH, tile);
+                    data = TerrainChunk.generate(x, z, gen3d, size, sub, waterH);
                 } catch (Throwable t) {
                     LOG.log(Level.SEVERE, "Échec de génération du chunk " + x + "," + z, t);
                 }
@@ -181,7 +173,7 @@ public final class ChunkLoader {
         }
     }
 
-    public void regenerate(TerrainGenerator newGenerator, long newSeed) {
+    public void regenerate(TerrainGenerator newGenerator) {
         generation++; // invalide tous les calculs en cours
         ready.clear();
         pending.clear();
@@ -189,7 +181,6 @@ public final class ChunkLoader {
         terrainNode.detachAllChildren();
         loaded.clear();
         generator = newGenerator;
-        seed = newSeed;
         dirty = true;
         update();
     }

@@ -10,8 +10,10 @@ import com.mygame.texture.TextureLibrary;
 
 /** Façade du terrain pour Main.java et les autres modules. */
 public final class TerrainManager {
-    /** Nom de la texture dans textures.xml. */
+    /** Noms des couches de texture dans textures.xml. */
+    private static final String GRASS = "grass";
     private static final String SAND = "sand";
+    private static final String GRAVEL = "gravel";
     private static final String TEXTURES_XML = "/textures.xml";
 
     private final Node rootNode;
@@ -22,7 +24,7 @@ public final class TerrainManager {
     private TerrainGenerator generator;
     private ChunkLoader loader;
     private TextureLibrary textures;
-    private Material sand;
+    private Material terrainMaterial;
     private long seed;
 
     public TerrainManager(Node rootNode, AssetManager assets, Camera camera, GameConfig config) {
@@ -40,26 +42,36 @@ public final class TerrainManager {
         textures = TextureLibrary.fromClasspath(TEXTURES_XML);
         textures.setSeed(seed);
 
-        // Un seul Material partagé par tous les chunks (moins de changements d'état GPU).
-        sand = new Material(assets, "Common/MatDefs/Light/Lighting.j3md");
-        sand.setBoolean("UseMaterialColors", true);
-        sand.setBoolean("UseVertexColor", true);
-        sand.setColor("Diffuse", ColorRGBA.White);
-        sand.setColor("Ambient", ColorRGBA.White);
-        // Sable : mat, avec un très léger éclat.
-        sand.setColor("Specular", new ColorRGBA(0.10f, 0.095f, 0.08f, 1f));
-        sand.setFloat("Shininess", 10f);
+        terrainMaterial = createMaterial();
         applyTextures();
 
         if (terrainNode.getParent() == null) rootNode.attachChild(terrainNode);
-        loader = new ChunkLoader(terrainNode, camera, sand, generator, seed, config,
-                textures.getTileMeters(SAND));
+        loader = new ChunkLoader(terrainNode, camera, terrainMaterial, generator, config);
         loader.update();
     }
 
+    private Material createMaterial() {
+        Material material = new Material(assets, "Common/MatDefs/Terrain/TerrainLighting.j3md");
+        material.setBoolean("useTriPlanarMapping", false);
+        material.setColor("Diffuse", ColorRGBA.White);
+        material.setColor("Ambient", new ColorRGBA(0.32f, 0.32f, 0.32f, 1f));
+        material.setColor("Specular", new ColorRGBA(0.08f, 0.08f, 0.08f, 1f));
+        material.setFloat("Shininess", 8f);
+        return material;
+    }
+
     private void applyTextures() {
-        sand.setTexture("DiffuseMap", textures.diffuse(SAND));
-        sand.setTexture("NormalMap", textures.normal(SAND));
+        String[] textureNames = { GRASS, SAND, GRAVEL };
+        String[] diffuseParameters = { "DiffuseMap", "DiffuseMap_1", "DiffuseMap_2" };
+        String[] normalParameters = { "NormalMap", "NormalMap_1", "NormalMap_2" };
+        String[] scaleParameters = { "DiffuseMap_0_scale", "DiffuseMap_1_scale", "DiffuseMap_2_scale" };
+        for (int i = 0; i < textureNames.length; i++) {
+            String textureName = textureNames[i];
+            terrainMaterial.setTexture(diffuseParameters[i], textures.diffuse(textureName));
+            terrainMaterial.setTexture(normalParameters[i], textures.normal(textureName));
+            terrainMaterial.setFloat(scaleParameters[i],
+                    config.chunkSize / textures.getTileMeters(textureName));
+        }
     }
 
     public void update(float tpf) { if (loader != null) loader.update(); }
@@ -73,7 +85,7 @@ public final class TerrainManager {
         generator = new TerrainGenerator(newSeed);
         textures.setSeed(newSeed);   // textures régénérées pour la nouvelle seed
         applyTextures();
-        loader.regenerate(generator, newSeed);
+        loader.regenerate(generator);
     }
 
     public void cleanup() {
