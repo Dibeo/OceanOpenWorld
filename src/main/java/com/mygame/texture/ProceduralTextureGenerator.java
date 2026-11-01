@@ -4,7 +4,7 @@ import com.jme3.texture.Image;
 import com.jme3.texture.Texture2D;
 import com.jme3.texture.image.ColorSpace;
 import com.jme3.util.BufferUtils;
-import com.mygame.terrain.PerlinNoise;
+import com.mygame.noise.PerlinNoise;
 import com.mygame.texture.TextureDefinition.Layer;
 import com.mygame.texture.TextureDefinition.MapSpec;
 

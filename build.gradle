@@ -68,9 +68,17 @@ dependencies {
   // Additional Libraries
   implementation "org.jmonkeyengine:jme3-effects:$jmeVer"
   implementation "org.jmonkeyengine:jme3-terrain:$jmeVer"
+  implementation "com.github.Ali-RS:jme-fastnoise:2fdb84a47c"
+
+  testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
+  testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.11.4"
 
   // Assets sub-project
   runtimeOnly project(':assets')
+}
+
+test {
+    useJUnitPlatform()
 }
 
 jar {

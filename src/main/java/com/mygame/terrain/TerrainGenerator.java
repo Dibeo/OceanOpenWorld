@@ -1,5 +1,7 @@
 package com.mygame.terrain;
 
+import com.mygame.noise.PerlinNoise;
+
 /** Générateur de hauteurs. Immuable après construction : utilisable depuis plusieurs threads. */
 public final class TerrainGenerator {
     private final PerlinNoise continental, islands, details, dunes, warp, tint;
