@@ -29,6 +29,8 @@
         waveSpeed="0.6"
         waveScale="0.004"
         maxAmplitude="0.8"
+        windChangeSpeed="0.015"
+        windStrengthVariation="0.5"
         reflectionMapSize="512"
     />
 

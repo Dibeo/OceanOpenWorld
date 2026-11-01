@@ -2,7 +2,6 @@ package com.mygame.water;
 
 import com.jme3.asset.AssetManager;
 import com.jme3.math.ColorRGBA;
-import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
 import com.jme3.post.Filter;
 import com.jme3.post.FilterPostProcessor;
@@ -18,6 +17,7 @@ public class WaterManager {
     private final Vector3f sunDirection;
     private final GameConfig config;
     private WaterFilter water;
+    private WindModel wind;
     private FilterPostProcessor fpp;
 
     public WaterManager(Node reflectionScene, AssetManager assets,
@@ -44,9 +44,10 @@ public class WaterManager {
         water.setRefractionStrength(0.1f);
         water.setUseRipples(true);
         water.setWaveScale(config.waveScale);
-        water.setMaxAmplitude(config.maxAmplitude);
         water.setSpeed(config.waveSpeed);
-        water.setWindDirection(new Vector2f(1f, 0.3f).normalizeLocal());
+        wind = new WindModel(config.seed, config.windChangeSpeed,
+                config.windStrengthVariation, config.maxAmplitude);
+        applyWind();
         water.setShininess(0.8f);
         water.setSunScale(2.5f);
         water.setUseFoam(true);
@@ -62,6 +63,17 @@ public class WaterManager {
         viewPort.addProcessor(fpp);
     }
 
+    public void update(float tpf) {
+        if (wind == null) return;
+        wind.update(tpf);
+        applyWind();
+    }
+
+    private void applyWind() {
+        water.setWindDirection(wind.getDirection());
+        water.setMaxAmplitude(wind.getWaveAmplitude());
+    }
+
     public WaterFilter getWaterFilter() { return water; }
     public FilterPostProcessor getFilterPostProcessor() { return fpp; }
 
@@ -72,5 +84,6 @@ public class WaterManager {
             fpp = null;
         }
         water = null;
+        wind = null;
     }
 }

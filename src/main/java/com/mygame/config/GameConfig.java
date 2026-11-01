@@ -19,6 +19,7 @@ public final class GameConfig {
     public final int width, height, fpsLimit;
     public final boolean vsync, gammaCorrection;
     public final float waterHeight, waterTransparency, waveSpeed, waveScale, maxAmplitude;
+    public final float windChangeSpeed, windStrengthVariation;
     public final int reflectionMapSize;
     public final float sunIntensity;
 
@@ -47,6 +48,11 @@ public final class GameConfig {
         waveSpeed = nonnegativeFloat(water, "waveSpeed");
         waveScale = nonnegativeFloat(water, "waveScale");
         maxAmplitude = nonnegativeFloat(water, "maxAmplitude");
+        windChangeSpeed = positiveFloat(water, "windChangeSpeed");
+        windStrengthVariation = nonnegativeFloat(water, "windStrengthVariation");
+        if (windStrengthVariation > 1f) {
+            throw new IllegalArgumentException("water.windStrengthVariation doit être <= 1");
+        }
         reflectionMapSize = positiveInt(water, "reflectionMapSize");
         sunIntensity = nonnegativeFloat(lighting, "sunIntensity");
         if (cameraFar <= 1f) throw new IllegalArgumentException("camera.farPlane doit être > 1");

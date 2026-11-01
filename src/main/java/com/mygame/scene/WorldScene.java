@@ -77,6 +77,7 @@ public class WorldScene extends Node {
         if (!initialized) return;
         sky.update(tpf);
         terrain.update(tpf);
+        water.update(tpf);
     }
 
     public void regenerate(long seed) {
