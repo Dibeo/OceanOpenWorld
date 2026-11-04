@@ -17,35 +17,35 @@
       grain  : amplitude (bruit blanc par pixel)
 -->
 <textures>
-  <texture name="sand" size="256" tileMeters="4">
-    <diffuse base="0.92" contrast="1.0" r="1" g="0.82" b="0.55">
-      <layer type="perlin" cells="32" octaves="1" amplitude="0.04"/>
-      <layer type="perlin" cells="96" octaves="1" amplitude="0.04"/>
-      <layer type="grain" amplitude="0.05"/>
-    </diffuse>
-    <normal strength="6">
-      <layer type="ripple" frequency="6" warpCells="4" warpAmount="0.35" amplitude="0.35"/>
-      <layer type="perlin" cells="64" octaves="2" persistence="0.5" amplitude="0.49"/>
-    </normal>
-  </texture>
-  <texture name="grass" size="256" tileMeters="4">
-    <diffuse base="0.88" contrast="0.7" r="0.42" g="0.98" b="0.32">
-      <layer type="perlin" cells="24" octaves="2" persistence="0.55" amplitude="0.07"/>
-      <layer type="grain" amplitude="0.035"/>
-    </diffuse>
-    <normal strength="5">
-      <layer type="perlin" cells="48" octaves="3" persistence="0.5" amplitude="0.32"/>
-      <layer type="grain" amplitude="0.12"/>
-    </normal>
-  </texture>
-  <texture name="gravel" size="256" tileMeters="4">
-    <diffuse base="0.82" contrast="0.8" r="0.78" g="0.82" b="0.86">
-      <layer type="perlin" cells="40" octaves="2" persistence="0.5" amplitude="0.07"/>
-      <layer type="grain" amplitude="0.08"/>
-    </diffuse>
-    <normal strength="7">
-      <layer type="perlin" cells="64" octaves="3" persistence="0.52" amplitude="0.48"/>
-      <layer type="grain" amplitude="0.18"/>
-    </normal>
-  </texture>
+    <texture name="sand" size="256" tileMeters="4">
+        <diffuse base="0.92" contrast="1.0" r="1" g="0.82" b="0.55">
+            <layer type="perlin" cells="32" octaves="1" amplitude="0.04"/>
+            <layer type="perlin" cells="96" octaves="1" amplitude="0.04"/>
+            <layer type="grain" amplitude="0.05"/>
+        </diffuse>
+        <normal strength="6">
+            <layer type="ripple" frequency="6" warpCells="4" warpAmount="0.35" amplitude="0.35"/>
+            <layer type="perlin" cells="64" octaves="2" persistence="0.5" amplitude="0.49"/>
+        </normal>
+    </texture>
+    <texture name="grass" size="256" tileMeters="4">
+        <diffuse base="0.88" contrast="0.7" r="0.42" g="0.98" b="0.32">
+            <layer type="perlin" cells="24" octaves="2" persistence="0.55" amplitude="0.07"/>
+            <layer type="grain" amplitude="0.035"/>
+        </diffuse>
+        <normal strength="5">
+            <layer type="perlin" cells="48" octaves="3" persistence="0.5" amplitude="0.32"/>
+            <layer type="grain" amplitude="0.12"/>
+        </normal>
+    </texture>
+    <texture name="gravel" size="256" tileMeters="4">
+        <diffuse base="0.82" contrast="0.8" r="0.78" g="0.82" b="0.86">
+            <layer type="perlin" cells="40" octaves="2" persistence="0.5" amplitude="0.07"/>
+            <layer type="grain" amplitude="0.08"/>
+        </diffuse>
+        <normal strength="7">
+            <layer type="perlin" cells="64" octaves="3" persistence="0.52" amplitude="0.48"/>
+            <layer type="grain" amplitude="0.18"/>
+        </normal>
+    </texture>
 </textures>

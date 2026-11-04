@@ -16,17 +16,19 @@ public class WaterManager {
     private final ViewPort viewPort;
     private final Vector3f sunDirection;
     private final GameConfig config;
+    private final WindModel wind;
     private WaterFilter water;
-    private WindModel wind;
     private FilterPostProcessor fpp;
 
     public WaterManager(Node reflectionScene, AssetManager assets,
-                        ViewPort viewPort, Vector3f sunDirection, GameConfig config) {
+                        ViewPort viewPort, Vector3f sunDirection, GameConfig config,
+                        WindModel wind) {
         this.reflectionScene = reflectionScene;
         this.assets = assets;
         this.viewPort = viewPort;
         this.sunDirection = sunDirection.clone();
         this.config = config;
+        this.wind = wind;
     }
 
     /** @param preFilters filtres appliqués avant l'eau (ex. ombres), dans l'ordre. */
@@ -45,8 +47,6 @@ public class WaterManager {
         water.setUseRipples(true);
         water.setWaveScale(config.waveScale);
         water.setSpeed(config.waveSpeed);
-        wind = new WindModel(config.seed, config.windChangeSpeed,
-                config.windStrengthVariation, config.maxAmplitude);
         applyWind();
         water.setShininess(0.8f);
         water.setSunScale(2.5f);
@@ -64,8 +64,7 @@ public class WaterManager {
     }
 
     public void update(float tpf) {
-        if (wind == null) return;
-        wind.update(tpf);
+        if (water == null) return;
         applyWind();
     }
 
@@ -84,6 +83,5 @@ public class WaterManager {
             fpp = null;
         }
         water = null;
-        wind = null;
     }
 }

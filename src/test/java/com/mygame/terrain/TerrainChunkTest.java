@@ -3,8 +3,11 @@ package com.mygame.terrain;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class TerrainChunkTest {
     @Test
@@ -55,5 +58,44 @@ final class TerrainChunkTest {
                 assertEquals(westMap.get(westEdge + channel), eastMap.get(eastEdge + channel));
             }
         }
+    }
+
+    @Test
+    void grassPlacementIsSeededAndOnlyUsesGrassTerrain() {
+        TerrainGenerator generator = new TerrainGenerator(42L);
+        TerrainChunk.Data first = null;
+        int grassChunkX = 0, grassChunkZ = 0;
+        for (int z = -4; z <= 4 && first == null; z++) {
+            for (int x = -4; x <= 4; x++) {
+                TerrainChunk.Data candidate = TerrainChunk.generate(x, z, generator, 64, 32, 0f);
+                if (candidate.grass.indexCount > 0) {
+                    first = candidate;
+                    grassChunkX = x;
+                    grassChunkZ = z;
+                    break;
+                }
+            }
+        }
+        assertNotNull(first, "The sampled world area should contain grassy terrain");
+        TerrainChunk.Data second = TerrainChunk.generate(
+                grassChunkX, grassChunkZ, new TerrainGenerator(42L), 64, 32, 0f);
+
+        assertEquals(first.grass.positions, second.grass.positions);
+        assertEquals(first.grass.uvs, second.grass.uvs);
+
+        FloatBuffer positions = first.grass.positions.duplicate();
+        while (positions.hasRemaining()) {
+            float y = positions.get(positions.position() + 1);
+            assertTrue(y > 0.5f, "Grass bases must lie on the grassy side of the shoreline");
+            positions.position(positions.position() + 3);
+        }
+    }
+
+    @Test
+    void grassIsOmittedWhenTheChunkHasNoGrassSurface() {
+        TerrainChunk.Data data = TerrainChunk.generate(
+                0, 0, new TerrainGenerator(42L), 64, 32, 1000f);
+
+        assertEquals(0, data.grass.indexCount);
     }
 }

@@ -21,6 +21,7 @@ import java.nio.FloatBuffer;
 public final class SkyManager {
     private static final float MAX_SKY_RADIUS = 450f;
     private static final float SUN_RADIUS = 14f;
+    private static final ColorRGBA HORIZON = new ColorRGBA(0.72f, 0.85f, 0.96f, 1f);
 
     private final Node scene;
     private final AssetManager assets;
@@ -77,7 +78,9 @@ public final class SkyManager {
         // Le soleil doit être masqué par un objet opaque situé devant lui.
         sunMaterial.getAdditionalRenderState().setDepthTest(true);
         sunGeometry.setMaterial(sunMaterial);
-        sunGeometry.setQueueBucket(RenderQueue.Bucket.Transparent);
+        // Bucket Sky (profondeur 1, ordre d'insertion) : dessiné avant les nuages, qui peuvent
+        // ainsi passer devant le soleil ; le terrain, lui, le masque toujours.
+        sunGeometry.setQueueBucket(RenderQueue.Bucket.Sky);
         skyNode.attachChild(sunGeometry);
 
         scene.attachChild(skyNode);
@@ -89,7 +92,7 @@ public final class SkyManager {
         FloatBuffer positions = mesh.getFloatBuffer(VertexBuffer.Type.Position);
         int count = mesh.getVertexCount();
         float[] colors = new float[count * 4];
-        ColorRGBA horizon = new ColorRGBA(0.72f, 0.85f, 0.96f, 1f);
+        ColorRGBA horizon = HORIZON;
         ColorRGBA zenith = new ColorRGBA(0.08f, 0.34f, 0.78f, 1f);
         ColorRGBA lower = new ColorRGBA(0.27f, 0.43f, 0.60f, 1f);
         ColorRGBA c = new ColorRGBA();
@@ -133,5 +136,15 @@ public final class SkyManager {
 
     public Node getSkyNode() {
         return skyNode;
+    }
+
+    /** Rayon du dôme (valide après {@link #initialize()}). */
+    public float getSkyRadius() {
+        return skyRadius;
+    }
+
+    /** Couleur de l'horizon : référence commune pour la brume et l'ambiant des nuages. */
+    public static ColorRGBA horizonColor() {
+        return HORIZON.clone();
     }
 }

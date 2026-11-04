@@ -3,10 +3,13 @@ package com.mygame.terrain;
 import com.jme3.asset.AssetManager;
 import com.jme3.material.Material;
 import com.jme3.math.ColorRGBA;
+import com.jme3.math.Vector2f;
+import com.jme3.math.Vector3f;
 import com.jme3.renderer.Camera;
 import com.jme3.scene.Node;
 import com.mygame.config.GameConfig;
 import com.mygame.texture.TextureLibrary;
+import com.mygame.water.WindModel;
 
 /** Façade du terrain pour Main.java et les autres modules. */
 public final class TerrainManager {
@@ -20,18 +23,23 @@ public final class TerrainManager {
     private final AssetManager assets;
     private final Camera camera;
     private final GameConfig config;
+    private final WindModel wind;
     private final Node terrainNode = new Node("InfiniteSandTerrain");
     private TerrainGenerator generator;
     private ChunkLoader loader;
     private TextureLibrary textures;
     private Material terrainMaterial;
+    private Material grassMaterial;
     private long seed;
+    private float elapsedTime;
 
-    public TerrainManager(Node rootNode, AssetManager assets, Camera camera, GameConfig config) {
+    public TerrainManager(Node rootNode, AssetManager assets, Camera camera, GameConfig config,
+                          WindModel wind) {
         this.rootNode = rootNode;
         this.assets = assets;
         this.camera = camera;
         this.config = config;
+        this.wind = wind;
     }
 
     public void initialize(long seed) {
@@ -44,10 +52,27 @@ public final class TerrainManager {
 
         terrainMaterial = createMaterial();
         applyTextures();
+        grassMaterial = createGrassMaterial();
 
         if (terrainNode.getParent() == null) rootNode.attachChild(terrainNode);
-        loader = new ChunkLoader(terrainNode, camera, terrainMaterial, generator, config);
+        loader = new ChunkLoader(terrainNode, camera, terrainMaterial, grassMaterial, generator, config);
         loader.update();
+    }
+
+    private Material createGrassMaterial() {
+        Material material = new Material(assets, "MatDefs/Grass/Grass.j3md");
+        material.setTexture("ColorMap", GrassTexture.createTuftTexture());
+        // L'herbe rétrécit jusqu'à disparaître entre ces deux distances (mètres, horizontales).
+        material.setFloat("FadeStart", config.grassDistance * 0.6f);
+        material.setFloat("FadeEnd", config.grassDistance);
+        material.setColor("AmbientColor", new ColorRGBA(0.38f, 0.39f, 0.32f, 1f));
+        material.setColor("SunColor", new ColorRGBA(0.85f, 0.82f, 0.68f, 1f));
+        material.setVector3("SunDirection", new Vector3f(-0.3f, -0.8f, -0.5f).normalizeLocal());
+        Vector2f direction = wind.getDirection();
+        material.setVector2("WindDirection", direction);
+        material.setFloat("WindStrength", wind.getStrength());
+        material.setFloat("Time", 0f);
+        return material;
     }
 
     private Material createMaterial() {
@@ -74,7 +99,29 @@ public final class TerrainManager {
         }
     }
 
-    public void update(float tpf) { if (loader != null) loader.update(); }
+    public void update(float tpf) {
+        if (loader != null) loader.update();
+        elapsedTime = (elapsedTime + tpf) % 10000f;
+        if (grassMaterial != null) {
+            grassMaterial.setFloat("Time", elapsedTime);
+            updateWindUniforms();
+        }
+    }
+
+    private void updateWindUniforms() {
+        Vector2f direction = wind.getDirection();
+        grassMaterial.setVector2("WindDirection", direction);
+        grassMaterial.setFloat("WindStrength", wind.getStrength());
+    }
+
+    public void setSunDirection(Vector3f direction) {
+        if (grassMaterial != null) grassMaterial.setVector3("SunDirection", direction);
+    }
+
+    public void setSunColor(ColorRGBA color) {
+        if (grassMaterial != null) grassMaterial.setColor("SunColor", color);
+    }
+
     public float getHeight(float x, float z) { return generator.getHeight(x, z); }
     public long getSeed() { return seed; }
     public int getLoadedChunkCount() { return loader.getLoadedChunkCount(); }
@@ -90,6 +137,8 @@ public final class TerrainManager {
 
     public void cleanup() {
         if (loader != null) loader.shutdown();
+        terrainNode.detachAllChildren();
+        loader = null;
         terrainNode.removeFromParent();
     }
 }

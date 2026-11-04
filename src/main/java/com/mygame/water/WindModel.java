@@ -15,6 +15,7 @@ public final class WindModel {
     private final Vector2f direction = new Vector2f(1f, 0f);
     private double elapsedTime;
     private float waveAmplitude;
+    private float strength;
 
     public WindModel(long seed, float changeSpeed, float strengthVariation, float baseAmplitude) {
         if (!Float.isFinite(changeSpeed) || changeSpeed <= 0f) {
@@ -45,6 +46,7 @@ public final class WindModel {
         direction.set((float) Math.cos(angle), (float) Math.sin(angle));
 
         double force = noise.noise(sampleTime, STRENGTH_OFFSET);
+        strength = 0.5f + 0.5f * (float) force;
         waveAmplitude = baseAmplitude * (1f + strengthVariation * (float) force);
     }
 
@@ -54,5 +56,10 @@ public final class WindModel {
 
     public float getWaveAmplitude() {
         return waveAmplitude;
+    }
+
+    /** Normalized wind force (0..1), shared by visual effects such as foliage. */
+    public float getStrength() {
+        return strength;
     }
 }

@@ -38,4 +38,37 @@
         sunIntensity="1.5"
     />
 
+    <!--
+      Herbe. Placement déterministe (seed du monde).
+        density  : touffes par m² (une touffe = plusieurs brins) ; 3 = dense, 6+ = très dense
+        distance : rayon (mètres) autour de la caméra où l'herbe existe ; fondu progressif sur les derniers 40 %
+    -->
+    <grass
+        density="3.0"
+        distance="110.0"
+    />
+
+    <!--
+      Nuages volumétriques. La forme des nuages et la direction du vent dérivent de world.seed.
+        altitude / thickness : base et épaisseur de la couche (mètres)
+        coverage             : 0 = ciel dégagé, 1 = couvert
+        density              : extinction maximale (1/m) ; plus haut = nuages plus opaques
+        windSpeed            : m/s
+        tileMeters           : taille réelle (mètres) d'une répétition de la texture de bruit
+        textureSize          : 256, 512 ou 1024
+        steps / lightSteps   : qualité du ray-marching (coût GPU)
+    -->
+    <clouds
+        enabled="true"
+        altitude="700.0"
+        thickness="420.0"
+        coverage="0.65"
+        density="0.04"
+        windSpeed="6.0"
+        tileMeters="6000.0"
+        textureSize="256"
+        steps="48"
+        lightSteps="5"
+    />
+
 </gameConfig>

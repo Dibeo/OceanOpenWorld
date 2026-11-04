@@ -22,6 +22,10 @@ public final class GameConfig {
     public final float windChangeSpeed, windStrengthVariation;
     public final int reflectionMapSize;
     public final float sunIntensity;
+    public final float grassDensity, grassDistance;
+    public final boolean cloudsEnabled;
+    public final float cloudAltitude, cloudThickness, cloudCoverage, cloudDensity, cloudWindSpeed, cloudTileMeters;
+    public final int cloudTextureSize, cloudSteps, cloudLightSteps;
 
     private GameConfig(Element root) {
         Element world = element(root, "world");
@@ -30,6 +34,8 @@ public final class GameConfig {
         Element graphics = element(root, "graphics");
         Element water = element(root, "water");
         Element lighting = element(root, "lighting");
+        Element clouds = element(root, "clouds");
+        Element grass = element(root, "grass");
 
         seed = Long.parseLong(required(world, "seed"));
         chunkSize = positiveInt(terrain, "chunkSize");
@@ -55,6 +61,28 @@ public final class GameConfig {
         }
         reflectionMapSize = positiveInt(water, "reflectionMapSize");
         sunIntensity = nonnegativeFloat(lighting, "sunIntensity");
+        grassDensity = positiveFloat(grass, "density");
+        grassDistance = positiveFloat(grass, "distance");
+        if (grassDensity > 16f) throw new IllegalArgumentException("grass.density doit être <= 16");
+        if (grassDistance < 10f || grassDistance > 400f) {
+            throw new IllegalArgumentException("grass.distance doit être dans [10, 400]");
+        }
+        cloudsEnabled = bool(clouds, "enabled");
+        cloudAltitude = positiveFloat(clouds, "altitude");
+        cloudThickness = positiveFloat(clouds, "thickness");
+        cloudCoverage = nonnegativeFloat(clouds, "coverage");
+        cloudDensity = positiveFloat(clouds, "density");
+        cloudWindSpeed = nonnegativeFloat(clouds, "windSpeed");
+        cloudTileMeters = positiveFloat(clouds, "tileMeters");
+        cloudTextureSize = positiveInt(clouds, "textureSize");
+        cloudSteps = positiveInt(clouds, "steps");
+        cloudLightSteps = positiveInt(clouds, "lightSteps");
+        if (cloudCoverage > 1f) throw new IllegalArgumentException("clouds.coverage doit être <= 1");
+        if (cloudTextureSize < 256 || cloudTextureSize > 1024 || Integer.bitCount(cloudTextureSize) != 1) {
+            throw new IllegalArgumentException("clouds.textureSize doit valoir 256, 512 ou 1024");
+        }
+        if (cloudSteps < 8 || cloudSteps > 128) throw new IllegalArgumentException("clouds.steps doit être dans [8, 128]");
+        if (cloudLightSteps > 8) throw new IllegalArgumentException("clouds.lightSteps doit être <= 8");
         if (cameraFar <= 1f) throw new IllegalArgumentException("camera.farPlane doit être > 1");
         if (renderDistance > 64) throw new IllegalArgumentException("renderDistance trop élevé (max 64)");
         if (subdivisions > 256) throw new IllegalArgumentException("subdivisions trop élevé (max 256)");

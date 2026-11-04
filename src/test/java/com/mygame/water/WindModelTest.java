@@ -54,6 +54,17 @@ final class WindModelTest {
     }
 
     @Test
+    void normalizedWindStrengthRemainsWithinZeroAndOne() {
+        WindModel model = new WindModel(5678L, 0.05f, 0.4f, 2f);
+
+        for (int i = 0; i < 100; i++) {
+            model.update(1f);
+            assertTrue(model.getStrength() >= 0f);
+            assertTrue(model.getStrength() <= 1f);
+        }
+    }
+
+    @Test
     void rejectsInvalidWindSettingsAndTimeSteps() {
         assertThrows(IllegalArgumentException.class,
                 () -> new WindModel(1L, 0f, 0.5f, 1f));

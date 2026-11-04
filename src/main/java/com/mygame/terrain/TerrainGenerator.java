@@ -6,15 +6,19 @@ import com.mygame.noise.PerlinNoise;
 public final class TerrainGenerator {
     private static final double ISLAND_FREQUENCY = .0035;
 
+    private final long seed;
     private final PerlinNoise continental, islands, details, dunes, warp, tint;
+    private final PerlinNoise grass;
 
     public TerrainGenerator(long seed) {
+        this.seed = seed;
         continental = new PerlinNoise(seed);
         islands = new PerlinNoise(seed + 1009L);
         details = new PerlinNoise(seed + 2003L);
         dunes = new PerlinNoise(seed + 3001L);
         warp = new PerlinNoise(seed + 4001L);
         tint = new PerlinNoise(seed + 5003L);
+        grass = new PerlinNoise(seed + 6007L);
     }
 
     public float getHeight(double x, double z) {
@@ -41,6 +45,34 @@ public final class TerrainGenerator {
     /** Variation de teinte à grande échelle (-1..1 environ) pour casser l'uniformité du sable. */
     public float getTint(double x, double z) {
         return (float) tint.fractal(x*.004, z*.004, 2, .5, 2);
+    }
+
+    /**
+     * Probabilité de présence d'une touffe (0..1) pilotée par le Perlin de la seed.
+     * Le sol herbeux est densément couvert ; seules de rares clairières laissent voir le sol.
+     */
+    public float getGrassDensity(double x, double z) {
+        double value = grass.fractal(x * .035, z * .035, 3, .5, 2);
+        double clearing = smoothstep(-.5, -.15, value);
+        return (float) (clearing * (.82 + .18 * (value + 1.0) * .5));
+    }
+
+    /** Sécheresse de l'herbe (0 = verte, 1 = jaunie) : grandes zones + petites taches. */
+    public float getGrassDryness(double x, double z) {
+        double large = smoothstep(.12, .55, getTint(x, z));
+        double patches = smoothstep(.15, .7, grass.fractal(x * .09 + 311, z * .09 - 97, 2, .5, 2));
+        return (float) Math.min(1.0, large * .75 + patches * .35);
+    }
+
+    long getGrassChunkSeed(int chunkX, int chunkZ) {
+        return grassSeed(chunkX, chunkZ);
+    }
+
+    private long grassSeed(int chunkX, int chunkZ) {
+        long value = seed ^ 0x9E3779B97F4A7C15L;
+        value = (value ^ chunkX) * 0xBF58476D1CE4E5B9L;
+        value = (value ^ chunkZ) * 0x94D049BB133111EBL;
+        return value ^ (value >>> 31);
     }
 
     static double islandFrequency() {

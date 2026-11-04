@@ -9,11 +9,13 @@ import com.jme3.shadow.DirectionalLightShadowFilter;
 import com.jme3.shadow.EdgeFilteringMode;
 import com.jme3.scene.Node;
 import com.jme3.scene.control.AbstractControl;
+import com.mygame.cloud.CloudManager;
 import com.mygame.config.GameConfig;
 import com.mygame.lighting.LightingManager;
 import com.mygame.sky.SkyManager;
 import com.mygame.terrain.TerrainManager;
 import com.mygame.water.WaterManager;
+import com.mygame.water.WindModel;
 
 /** Assemble les systèmes sans dupliquer l'état solaire. */
 public class WorldScene extends Node {
@@ -24,8 +26,10 @@ public class WorldScene extends Node {
 
     private LightingManager lighting;
     private SkyManager sky;
+    private CloudManager clouds;
     private TerrainManager terrain;
     private WaterManager water;
+    private WindModel wind;
     private boolean initialized;
 
     public WorldScene(AssetManager assetManager, Camera camera,
@@ -53,8 +57,16 @@ public class WorldScene extends Node {
         sky = new SkyManager(this, assetManager, camera, lighting);
         sky.initialize();
 
-        terrain = new TerrainManager(this, assetManager, camera, config);
+        // Après le ciel : l'ordre d'attache fixe l'ordre de rendu dans le bucket Sky.
+        clouds = new CloudManager(this, assetManager, camera, lighting, sky, config);
+        clouds.initialize(config.seed);
+
+        wind = new WindModel(config.seed, config.windChangeSpeed,
+                config.windStrengthVariation, config.maxAmplitude);
+        terrain = new TerrainManager(this, assetManager, camera, config, wind);
         terrain.initialize(config.seed);
+        terrain.setSunDirection(lighting.getSunDirection());
+        terrain.setSunColor(lighting.getSunColor());
 
         // Ombres du soleil, appliquées avant l'eau. Les chunks sont CastAndReceive ;
         // la distance d'ombre est limitée pour ne rendre dans les shadow maps que les chunks proches.
@@ -66,7 +78,7 @@ public class WorldScene extends Node {
         shadows.setShadowZExtend(Math.min(160f, camera.getFrustumFar() * 0.5f));
         shadows.setShadowZFadeLength(30f);
 
-        water = new WaterManager(this, assetManager, viewPort, lighting.getSunDirection(), config);
+        water = new WaterManager(this, assetManager, viewPort, lighting.getSunDirection(), config, wind);
         water.initialize(shadows);
         water.getWaterFilter().setLightColor(lighting.getSunColor());
 
@@ -75,7 +87,9 @@ public class WorldScene extends Node {
 
     private void update(float tpf) {
         if (!initialized) return;
+        wind.update(tpf);
         sky.update(tpf);
+        clouds.update(tpf);
         terrain.update(tpf);
         water.update(tpf);
     }
@@ -83,11 +97,13 @@ public class WorldScene extends Node {
     public void regenerate(long seed) {
         ensureInitialized();
         terrain.regenerate(seed);
+        clouds.regenerate(seed);
     }
 
     public void setSunDirection(Vector3f direction) {
         ensureInitialized();
         lighting.setSunDirection(direction);
+        terrain.setSunDirection(lighting.getSunDirection());
         // Le ciel détecte le changement via LightingManager.getSunVersion().
         water.getWaterFilter().setLightDirection(lighting.getSunDirection());
     }
@@ -95,6 +111,7 @@ public class WorldScene extends Node {
     public void setSunIntensity(float intensity) {
         ensureInitialized();
         lighting.setSunIntensity(intensity);
+        terrain.setSunColor(lighting.getSunColor());
         water.getWaterFilter().setLightColor(lighting.getSunColor());
     }
 
@@ -104,8 +121,10 @@ public class WorldScene extends Node {
         initialized = false;
         water.cleanup();
         terrain.cleanup();
+        clouds.cleanup();
         sky.cleanup();
         lighting.cleanup();
+        wind = null;
         removeFromParent();
     }
 
@@ -118,5 +137,6 @@ public class WorldScene extends Node {
     public TerrainManager getTerrain() { return terrain; }
     public WaterManager getWater() { return water; }
     public SkyManager getSky() { return sky; }
+    public CloudManager getClouds() { return clouds; }
     public LightingManager getLighting() { return lighting; }
 }

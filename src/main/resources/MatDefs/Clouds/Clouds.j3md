@@ -1,0 +1,53 @@
+// Nuages volumétriques : ray-marching d'une couche de nuages, dessiné sur le dôme du ciel.
+MaterialDef Clouds {
+
+    MaterialParameters {
+        // R forme, G météo, B/A détails (voir CloudNoiseGenerator)
+        Texture2D NoiseMap
+
+        // Éclairage (la direction pointe VERS le soleil)
+        Vector3 SunDirection
+        Vector3 SunColor
+        Vector3 AmbientColor
+        Vector3 HorizonColor
+
+        // Vent : décalage courant et inclinaison des nuages avec l'altitude (mètres)
+        Vector2 WindOffset
+        Vector2 Shear
+
+        // Géométrie de la couche (mètres)
+        Float CloudBase
+        Float CloudThickness
+        Float TileMeters
+        Float MaxDistance
+
+        // Aspect
+        Float Coverage
+        Float Density
+        Float Erosion
+
+        // Qualité
+        Int Steps
+        Int LightSteps
+    }
+
+    Technique {
+        VertexShader GLSL150:   Shaders/Clouds/Clouds.vert
+        FragmentShader GLSL150: Shaders/Clouds/Clouds.frag
+
+        WorldParameters {
+            WorldMatrix
+            WorldViewProjectionMatrix
+            CameraPosition
+        }
+
+        // Le bucket Sky est dessiné à profondeur 1 : le terrain (profondeur < 1) masque les nuages.
+        // Sortie pré-multipliée (rgb déjà multiplié par alpha).
+        RenderState {
+            Blend PremultAlpha
+            DepthTest On
+            DepthWrite Off
+            FaceCull Off
+        }
+    }
+}

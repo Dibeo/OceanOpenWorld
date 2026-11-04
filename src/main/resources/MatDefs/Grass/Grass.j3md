@@ -1,0 +1,29 @@
+MaterialDef Grass {
+    MaterialParameters {
+        Texture2D ColorMap
+        Vector2 WindDirection
+        Float WindStrength
+        Float Time
+        Vector3 SunDirection
+        Color SunColor
+        Color AmbientColor
+        // Distances (mètres) entre lesquelles les touffes rétrécissent jusqu'à disparaître
+        Float FadeStart
+        Float FadeEnd
+    }
+
+    Technique {
+        VertexShader GLSL150:   Shaders/Grass/Grass.vert
+        FragmentShader GLSL150: Shaders/Grass/Grass.frag
+
+        WorldParameters {
+            WorldMatrix
+            WorldViewProjectionMatrix
+            CameraPosition
+        }
+
+        RenderState {
+            FaceCull Off
+        }
+    }
+}
