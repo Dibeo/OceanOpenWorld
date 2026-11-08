@@ -40,12 +40,25 @@
 
     <!--
       Herbe. Placement déterministe (seed du monde).
-        density  : touffes par m² (une touffe = plusieurs brins) ; 3 = dense, 6+ = très dense
+        density  : touffes par m² (une touffe = plusieurs brins) ; 2.5 = dense, 4+ = très dense
         distance : rayon (mètres) autour de la caméra où l'herbe existe ; fondu progressif sur les derniers 40 %
+        flowers  : quantité de fleurs (0 = aucune, 1 = prairie très fleurie) ; par plaques, selon le Perlin du monde
     -->
     <grass
-        density="3.0"
+        density="2.5"
         distance="110.0"
+        flowers="0.5"
+    />
+
+    <!--
+      Rochers. Formes et placement déterministes (Perlin + seed du monde) : chaque rocher est unique.
+        density   : rochers « principaux » par 1000 m² dans les zones rocheuses (chacun peut avoir
+                    des cailloux autour) ; 0 désactive les rochers
+        sizeScale : multiplicateur de taille (1 = blocs jusqu'à ~2 m de rayon)
+    -->
+    <rocks
+        density="4.0"
+        sizeScale="1.0"
     />
 
     <!--

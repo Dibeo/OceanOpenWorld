@@ -1,0 +1,26 @@
+MaterialDef Rock {
+    MaterialParameters {
+        // R taches de ton, G grain, B fissures (voir RockTexture) ; projetée en triplanaire
+        Texture2D NoiseMap
+        Vector3 SunDirection
+        Color SunColor
+        Color AmbientColor
+        Float TextureScale
+        Float BumpStrength
+    }
+
+    Technique {
+        VertexShader GLSL150:   Shaders/Rock/Rock.vert
+        FragmentShader GLSL150: Shaders/Rock/Rock.frag
+
+        WorldParameters {
+            WorldMatrix
+            WorldViewProjectionMatrix
+            CameraPosition
+        }
+
+        RenderState {
+            FaceCull Back
+        }
+    }
+}

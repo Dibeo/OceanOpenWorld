@@ -7,6 +7,7 @@ import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.Camera;
 import com.jme3.scene.Node;
+import com.jme3.texture.Texture2D;
 import com.mygame.config.GameConfig;
 import com.mygame.texture.TextureLibrary;
 import com.mygame.water.WindModel;
@@ -17,6 +18,9 @@ public final class TerrainManager {
     private static final String GRASS = "grass";
     private static final String SAND = "sand";
     private static final String GRAVEL = "gravel";
+    /** Variantes de vert mélangées par du bruit (couches 3 et 4 du terrain). */
+    private static final String GRASS_DRY = "grass_dry";
+    private static final String GRASS_DEEP = "grass_deep";
     private static final String TEXTURES_XML = "/textures.xml";
 
     private final Node rootNode;
@@ -30,6 +34,7 @@ public final class TerrainManager {
     private TextureLibrary textures;
     private Material terrainMaterial;
     private Material grassMaterial;
+    private Material rockMaterial;
     private long seed;
     private float elapsedTime;
 
@@ -53,15 +58,18 @@ public final class TerrainManager {
         terrainMaterial = createMaterial();
         applyTextures();
         grassMaterial = createGrassMaterial();
+        rockMaterial = createRockMaterial(seed);
 
         if (terrainNode.getParent() == null) rootNode.attachChild(terrainNode);
-        loader = new ChunkLoader(terrainNode, camera, terrainMaterial, grassMaterial, generator, config);
+        loader = new ChunkLoader(terrainNode, camera, terrainMaterial, grassMaterial, rockMaterial, generator, config);
         loader.update();
     }
 
     private Material createGrassMaterial() {
         Material material = new Material(assets, "MatDefs/Grass/Grass.j3md");
-        material.setTexture("ColorMap", GrassTexture.createTuftTexture());
+        Texture2D[] atlas = GrassTexture.create();
+        material.setTexture("ColorMap", atlas[0]);
+        material.setTexture("FlowerMap", atlas[1]);
         // L'herbe rétrécit jusqu'à disparaître entre ces deux distances (mètres, horizontales).
         material.setFloat("FadeStart", config.grassDistance * 0.6f);
         material.setFloat("FadeEnd", config.grassDistance);
@@ -72,6 +80,17 @@ public final class TerrainManager {
         material.setVector2("WindDirection", direction);
         material.setFloat("WindStrength", wind.getStrength());
         material.setFloat("Time", 0f);
+        return material;
+    }
+
+    private Material createRockMaterial(long seed) {
+        Material material = new Material(assets, "MatDefs/Rock/Rock.j3md");
+        material.setTexture("NoiseMap", RockTexture.create(seed));
+        material.setColor("AmbientColor", new ColorRGBA(0.38f, 0.39f, 0.36f, 1f));
+        material.setColor("SunColor", new ColorRGBA(0.85f, 0.82f, 0.68f, 1f));
+        material.setVector3("SunDirection", new Vector3f(-0.3f, -0.8f, -0.5f).normalizeLocal());
+        material.setFloat("TextureScale", 1.6f);    // mètres par répétition de la texture triplanaire
+        material.setFloat("BumpStrength", 0.9f);
         return material;
     }
 
@@ -86,10 +105,11 @@ public final class TerrainManager {
     }
 
     private void applyTextures() {
-        String[] textureNames = { GRASS, SAND, GRAVEL };
-        String[] diffuseParameters = { "DiffuseMap", "DiffuseMap_1", "DiffuseMap_2" };
-        String[] normalParameters = { "NormalMap", "NormalMap_1", "NormalMap_2" };
-        String[] scaleParameters = { "DiffuseMap_0_scale", "DiffuseMap_1_scale", "DiffuseMap_2_scale" };
+        String[] textureNames = { GRASS, SAND, GRAVEL, GRASS_DRY, GRASS_DEEP };
+        String[] diffuseParameters = { "DiffuseMap", "DiffuseMap_1", "DiffuseMap_2", "DiffuseMap_3", "DiffuseMap_4" };
+        String[] normalParameters = { "NormalMap", "NormalMap_1", "NormalMap_2", "NormalMap_3", "NormalMap_4" };
+        String[] scaleParameters = { "DiffuseMap_0_scale", "DiffuseMap_1_scale", "DiffuseMap_2_scale",
+                "DiffuseMap_3_scale", "DiffuseMap_4_scale" };
         for (int i = 0; i < textureNames.length; i++) {
             String textureName = textureNames[i];
             terrainMaterial.setTexture(diffuseParameters[i], textures.diffuse(textureName));
@@ -116,10 +136,12 @@ public final class TerrainManager {
 
     public void setSunDirection(Vector3f direction) {
         if (grassMaterial != null) grassMaterial.setVector3("SunDirection", direction);
+        if (rockMaterial != null) rockMaterial.setVector3("SunDirection", direction);
     }
 
     public void setSunColor(ColorRGBA color) {
         if (grassMaterial != null) grassMaterial.setColor("SunColor", color);
+        if (rockMaterial != null) rockMaterial.setColor("SunColor", color);
     }
 
     public float getHeight(float x, float z) { return generator.getHeight(x, z); }
@@ -131,6 +153,7 @@ public final class TerrainManager {
         seed = newSeed;
         generator = new TerrainGenerator(newSeed);
         textures.setSeed(newSeed);   // textures régénérées pour la nouvelle seed
+        rockMaterial.setTexture("NoiseMap", RockTexture.create(newSeed));
         applyTextures();
         loader.regenerate(generator);
     }

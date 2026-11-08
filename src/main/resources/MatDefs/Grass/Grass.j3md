@@ -1,6 +1,8 @@
 MaterialDef Grass {
     MaterialParameters {
         Texture2D ColorMap
+        // Têtes de fleurs (R pétales, G cœur), même disposition que ColorMap
+        Texture2D FlowerMap
         Vector2 WindDirection
         Float WindStrength
         Float Time

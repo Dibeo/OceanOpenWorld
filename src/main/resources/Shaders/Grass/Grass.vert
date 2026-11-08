@@ -3,13 +3,15 @@
 // Une touffe = 2 quads croisés. Attributs :
 //   inNormal    : normale du TERRAIN sous la touffe (éclairage cohérent avec le sol)
 //   inColor     : rgb = teinte (variation / herbe sèche), a = phase aléatoire du vent
-//   inTexCoord  : (u, v), v = 0 à la base, 1 au sommet
-//   inTexCoord2 : x = hauteur de la touffe (mètres)
+//   inTexCoord  : (u, v) dans le motif, v = 0 à la base, 1 au sommet
+//   inTexCoord2 : x = hauteur de la touffe (m), y = variante de motif (0..3, atlas 2x2), z = Y de la base
+//   inTexCoord3 : x = couleur de fleur (index de palette + variation), y = 1 si la touffe est fleurie
 attribute vec3 inPosition;
 attribute vec3 inNormal;
 attribute vec4 inColor;
 attribute vec2 inTexCoord;
-attribute vec2 inTexCoord2;
+attribute vec3 inTexCoord2;
+attribute vec2 inTexCoord3;
 
 uniform mat4 g_WorldMatrix;
 uniform mat4 g_WorldViewProjectionMatrix;
@@ -20,8 +22,11 @@ uniform float m_Time;
 uniform float m_FadeStart;
 uniform float m_FadeEnd;
 
-varying vec2 vUV;
+varying vec2 vUV;        // coordonnées dans l'atlas
+varying float vT;        // hauteur locale sur le brin (0..1)
+varying float vWave;     // inclinaison due au vent : module l'éclairage (ondes de lumière)
 varying vec3 vTint;
+varying vec2 vFlower;
 varying vec3 vNormal;
 varying vec3 vWorldPos;
 
@@ -34,8 +39,8 @@ void main() {
     // Fondu en distance : la touffe s'aplatit jusqu'à une surface nulle (pas d'apparition brutale).
     float dist = distance(world.xz, g_CameraPosition.xz);
     float fade = 1.0 - smoothstep(m_FadeStart, m_FadeEnd, dist);
-    float baseY = local.y - v * height;
-    local.y = baseY + v * height * fade;
+    float baseY = inTexCoord2.z;
+    local.y = baseY + (local.y - baseY) * fade;
 
     // Vent : inclinaison moyenne sous le vent, modulée par des fronts de rafale qui traversent
     // le champ, plus une oscillation propre à chaque touffe (phase aléatoire).
@@ -56,7 +61,11 @@ void main() {
     local.y -= bend * bend * 0.6 / max(height, 0.1);   // la longueur du brin se conserve à peu près
 
     gl_Position = g_WorldViewProjectionMatrix * vec4(local, 1.0);
-    vUV = inTexCoord;
+    vec2 cell = vec2(mod(inTexCoord2.y, 2.0), floor(inTexCoord2.y / 2.0));
+    vUV = (inTexCoord + cell) * 0.5;
+    vT = v;
+    vFlower = inTexCoord3;
+    vWave = (lean + osc) * v;
     vTint = inColor.rgb;
     vNormal = normalize((g_WorldMatrix * vec4(inNormal, 0.0)).xyz);
     vWorldPos = (g_WorldMatrix * vec4(local, 1.0)).xyz;

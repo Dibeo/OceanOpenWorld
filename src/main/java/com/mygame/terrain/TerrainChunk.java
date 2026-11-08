@@ -15,6 +15,7 @@ import com.jme3.texture.Texture;
 import com.jme3.texture.Texture2D;
 import com.jme3.texture.image.ColorSpace;
 import com.jme3.util.BufferUtils;
+import com.mygame.noise.PerlinNoise;
 
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
@@ -22,6 +23,7 @@ import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
 import java.util.ArrayList;
 import java.util.Random;
+
 
 /**
  * Un chunk de terrain.
@@ -36,36 +38,38 @@ public final class TerrainChunk {
     /** Résultat du calcul de fond : buffers prêts à être confiés au Mesh. */
     public static final class Data {
         final FloatBuffer positions, normals, tangents, uvs;
-        final ByteBuffer blendMap;
+        final ByteBuffer blendMap, blendMap1;
         final int blendMapSize;
         final float minY, maxY;
         final float[] heights;
         final int heightSide;
+        final RockShape.RockData rocks;
 
         Data(FloatBuffer positions, FloatBuffer normals, FloatBuffer tangents, FloatBuffer uvs,
-             ByteBuffer blendMap, int blendMapSize, float minY, float maxY,
-             float[] heights, int heightSide) {
+             ByteBuffer blendMap, ByteBuffer blendMap1, int blendMapSize, float minY, float maxY,
+             float[] heights, int heightSide, RockShape.RockData rocks) {
             this.positions = positions; this.normals = normals; this.tangents = tangents;
             this.uvs = uvs;
-            this.blendMap = blendMap; this.blendMapSize = blendMapSize;
+            this.blendMap = blendMap; this.blendMap1 = blendMap1; this.blendMapSize = blendMapSize;
             this.minY = minY; this.maxY = maxY;
-            this.heights = heights; this.heightSide = heightSide;
+            this.heights = heights; this.heightSide = heightSide; this.rocks = rocks;
         }
     }
 
-    /** Maillage d'herbe d'un chunk. {@code params} = (hauteur de la touffe, réservé) par sommet. */
+    /** Maillage d'herbe d'un chunk. {@code params} = (hauteur, variante de motif, Y de la base) par sommet ;
+     * {@code flowers} = (couleur de fleur + variation, 1 si la touffe est fleurie sinon 0). */
     static final class GrassData {
-        final FloatBuffer positions, normals, colors, uvs, params;
+        final FloatBuffer positions, normals, colors, uvs, params, flowers;
         final IntBuffer indices;
         final ShortBuffer shortIndices;
         final int indexCount;
         final float minY, maxY;
 
         GrassData(FloatBuffer positions, FloatBuffer normals, FloatBuffer colors, FloatBuffer uvs,
-                  FloatBuffer params, IntBuffer indices, ShortBuffer shortIndices, int indexCount,
+                  FloatBuffer params, FloatBuffer flowers, IntBuffer indices, ShortBuffer shortIndices, int indexCount,
                   float minY, float maxY) {
             this.positions = positions; this.normals = normals; this.colors = colors; this.uvs = uvs;
-            this.params = params;
+            this.params = params; this.flowers = flowers;
             this.indices = indices; this.shortIndices = shortIndices; this.indexCount = indexCount;
             this.minY = minY; this.maxY = maxY;
         }
@@ -76,9 +80,10 @@ public final class TerrainChunk {
     private final int heightSide;
     private final Geometry geometry;
     private Geometry grassGeometry;
+    private final Geometry rockGeometry;
     private boolean grassBuilt;
 
-    public TerrainChunk(int chunkX, int chunkZ, Data data, Material material,
+    public TerrainChunk(int chunkX, int chunkZ, Data data, Material material, Material rockMaterial,
                         VertexBuffer sharedIndices, int size) {
         this.chunkX = chunkX;
         this.chunkZ = chunkZ;
@@ -99,21 +104,37 @@ public final class TerrainChunk {
                 half, halfY, half));
         mesh.updateCounts();
 
-        ArrayList<java.nio.ByteBuffer> blendMapData = new ArrayList<>(1);
-        blendMapData.add(data.blendMap);
-        Texture2D blendMap = new Texture2D(new Image(Image.Format.RGB8, data.blendMapSize,
-                data.blendMapSize, 0, blendMapData,
-                new int[] { data.blendMapSize * data.blendMapSize * 3 }, ColorSpace.Linear));
-        blendMap.setWrap(Texture.WrapMode.Clamp);
-        blendMap.setMinFilter(Texture.MinFilter.BilinearNoMipMaps);
-        blendMap.setMagFilter(Texture.MagFilter.Bilinear);
         Material chunkMaterial = material.clone();
-        chunkMaterial.setTexture("AlphaMap", blendMap);
+        chunkMaterial.setTexture("AlphaMap", blendTexture(data.blendMap, data.blendMapSize));
+        chunkMaterial.setTexture("AlphaMap_1", blendTexture(data.blendMap1, data.blendMapSize));
 
         geometry = new Geometry("Chunk_" + chunkX + "_" + chunkZ, mesh);
         geometry.setMaterial(chunkMaterial);
         geometry.setShadowMode(RenderQueue.ShadowMode.CastAndReceive);
         geometry.setLocalTranslation((float) ((double) chunkX * size), 0f, (float) ((double) chunkZ * size));
+
+        rockGeometry = (data.rocks == null || data.rocks.indexCount == 0) ? null
+                : createRockGeometry(chunkX, chunkZ, data.rocks, rockMaterial, size);
+    }
+
+    private static Geometry createRockGeometry(int chunkX, int chunkZ, RockShape.RockData data,
+                                               Material material, int size) {
+        Mesh mesh = new Mesh();
+        mesh.setBuffer(vertexBuffer(Type.Position, 3, Format.Float, data.positions));
+        mesh.setBuffer(vertexBuffer(Type.Normal, 3, Format.Float, data.normals));
+        mesh.setBuffer(vertexBuffer(Type.Color, 4, Format.Float, data.colors));
+        mesh.setBuffer(data.shortIndices != null
+                ? vertexBuffer(Type.Index, 3, Format.UnsignedShort, data.shortIndices)
+                : vertexBuffer(Type.Index, 3, Format.UnsignedInt, data.indices));
+        Vector3f min = new Vector3f(data.minX, data.minY, data.minZ), max = new Vector3f(data.maxX, data.maxY, data.maxZ);
+        mesh.setBound(new BoundingBox(min.add(max).multLocal(0.5f), (max.x - min.x) * 0.5f + 0.05f,
+                (max.y - min.y) * 0.5f + 0.05f, (max.z - min.z) * 0.5f + 0.05f));
+        mesh.updateCounts();
+        Geometry rocks = new Geometry("Rocks_" + chunkX + "_" + chunkZ, mesh);
+        rocks.setMaterial(material);
+        rocks.setShadowMode(RenderQueue.ShadowMode.CastAndReceive);
+        rocks.setLocalTranslation((float) ((double) chunkX * size), 0f, (float) ((double) chunkZ * size));
+        return rocks;
     }
 
     /**
@@ -134,6 +155,8 @@ public final class TerrainChunk {
         grassBuilt = false;
     }
 
+    public Geometry getRockGeometry() { return rockGeometry; }
+
     boolean isGrassBuilt() { return grassBuilt; }
     float[] getHeights() { return heights; }
     int getHeightSide() { return heightSide; }
@@ -145,7 +168,8 @@ public final class TerrainChunk {
         mesh.setBuffer(vertexBuffer(Type.Normal, 3, Format.Float, data.normals));
         mesh.setBuffer(vertexBuffer(Type.Color, 4, Format.Float, data.colors));
         mesh.setBuffer(vertexBuffer(Type.TexCoord, 2, Format.Float, data.uvs));
-        mesh.setBuffer(vertexBuffer(Type.TexCoord2, 2, Format.Float, data.params));
+        mesh.setBuffer(vertexBuffer(Type.TexCoord2, 3, Format.Float, data.params));
+        mesh.setBuffer(vertexBuffer(Type.TexCoord3, 2, Format.Float, data.flowers));
         VertexBuffer indices = data.shortIndices != null
                 ? vertexBuffer(Type.Index, 3, Format.UnsignedShort, data.shortIndices)
                 : vertexBuffer(Type.Index, 3, Format.UnsignedInt, data.indices);
@@ -161,6 +185,17 @@ public final class TerrainChunk {
         geometry.setLocalTranslation((float) ((double) chunkX * size), 0f,
                 (float) ((double) chunkZ * size));
         return geometry;
+    }
+
+    private static Texture2D blendTexture(ByteBuffer pixels, int size) {
+        ArrayList<ByteBuffer> data = new ArrayList<>(1);
+        data.add(pixels);
+        Texture2D texture = new Texture2D(new Image(Image.Format.RGBA8, size, size, 0, data,
+                new int[] { size * size * 4 }, ColorSpace.Linear));
+        texture.setWrap(Texture.WrapMode.Clamp);
+        texture.setMinFilter(Texture.MinFilter.BilinearNoMipMaps);
+        texture.setMagFilter(Texture.MagFilter.Bilinear);
+        return texture;
     }
 
     private static VertexBuffer vertexBuffer(Type type, int components, Format format, java.nio.Buffer data) {
@@ -200,7 +235,8 @@ public final class TerrainChunk {
      * La texture RGB stocke des poids de mélange continus (R=base, G=sable, B=gravier).
      */
     public static Data generate(int chunkX, int chunkZ, TerrainGenerator generator,
-                                int size, int subdivisions, float waterHeight) {
+                                int size, int subdivisions, float waterHeight,
+                                float rockDensity, float rockSizeScale) {
         final int side = subdivisions + 1;
         final int hs = side + 2;
         final float step = (float) size / subdivisions;
@@ -219,7 +255,8 @@ public final class TerrainChunk {
         FloatBuffer normals = BufferUtils.createFloatBuffer(side * side * 3);
         FloatBuffer tangents = BufferUtils.createFloatBuffer(side * side * 4);
         FloatBuffer uvs = BufferUtils.createFloatBuffer(side * side * 2);
-        ByteBuffer blendMap = BufferUtils.createByteBuffer(side * side * 3);
+        ByteBuffer blendMap = BufferUtils.createByteBuffer(side * side * 4);
+        ByteBuffer blendMap1 = BufferUtils.createByteBuffer(side * side * 4);
         float minY = Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
         final float ny = 2f * step;
 
@@ -252,9 +289,17 @@ public final class TerrainChunk {
 
                 float[] weights = surfaceWeights(h, waterHeight);
                 float grassAndSand = weights[0] + weights[1];
+                // AlphaMap   : R base (herbe), G sable, B gravier, A herbe jaunie.
+                // AlphaMap_1 : R herbe profonde. Les variantes de vert ne remplacent le vert de base
+                // que là où il y a de l'herbe, avec un poids Perlin en coordonnées monde (sans couture).
+                double worldX = originX + x * step, worldZ = originZ + z * step;
+                float grassShare = weights[0];
                 blendMap.put((byte) 255)
                         .put(toByte(grassAndSand > 0f ? weights[1] / grassAndSand : 0f))
-                        .put(toByte(weights[2]));
+                        .put(toByte(weights[2]))
+                        .put(toByte(generator.getGrassDryness(worldX, worldZ) * grassShare));
+                blendMap1.put(toByte(generator.getGrassDeepness(worldX, worldZ) * grassShare))
+                        .put((byte) 0).put((byte) 0).put((byte) 0);
             }
         }
         positions.flip();
@@ -262,21 +307,122 @@ public final class TerrainChunk {
         tangents.flip();
         uvs.flip();
         blendMap.flip();
-        return new Data(positions, normals, tangents, uvs, blendMap, side, minY, maxY, heights, hs);
+        blendMap1.flip();
+        RockShape.RockData rocks = generateRocks(chunkX, chunkZ, generator, heights, hs, size, subdivisions,
+                waterHeight, rockDensity, rockSizeScale);
+        return new Data(positions, normals, tangents, uvs, blendMap, blendMap1, side, minY, maxY, heights, hs, rocks);
+    }
+
+    private static final float ROCK_CELL = 8f;
+
+    /**
+     * Rochers d'un chunk. Calcul pur et déterministe (seed du monde + coordonnées du chunk) ; chaque
+     * rocher a sa propre seed tirée dans l'ordre, donc sa forme ne dépend de rien d'autre.
+     * Grille jitterée de cellules de 8 m ; la probabilité suit le champ rocheux de Perlin et croît
+     * avec la pente. Les blocs et les rochers moyens sont entourés de cailloux.
+     */
+    static RockShape.RockData generateRocks(int chunkX, int chunkZ, TerrainGenerator generator,
+                                            float[] heights, int heightSide, int size, int subdivisions,
+                                            float waterHeight, float density, float sizeScale) {
+        if (density <= 0f) return null;
+        final float terrainStep = (float) size / subdivisions;
+        final double originX = (double) chunkX * size, originZ = (double) chunkZ * size;
+        final Random random = new Random(generator.getRockChunkSeed(chunkX, chunkZ));
+        final PerlinNoise shapeNoise = generator.getRockShapeNoise();
+        final RockShape.Buffers out = new RockShape.Buffers();
+        final int cells = (int) Math.ceil(size / ROCK_CELL);
+        final float baseProbability = density * ROCK_CELL * ROCK_CELL / 1000f;
+
+        for (int cz = 0; cz < cells; cz++) {
+            for (int cx = 0; cx < cells; cx++) {
+                // Tirages toujours consommés dans le même ordre, même quand la cellule est rejetée.
+                float localX = (cx + random.nextFloat()) * ROCK_CELL;
+                float localZ = (cz + random.nextFloat()) * ROCK_CELL;
+                float acceptance = random.nextFloat();
+                float sizePick = random.nextFloat();
+                float sizeRoll = random.nextFloat();
+                long rockSeed = random.nextLong();
+                if (localX >= size || localZ >= size) continue;
+
+                float y = sampleTerrainHeight(heights, heightSide, subdivisions, terrainStep, localX, localZ);
+                if (y < waterHeight + 0.1f) continue;
+                double worldX = originX + localX, worldZ = originZ + localZ;
+                float field = generator.getRockField(worldX, worldZ);
+                if (field <= 0f) continue;
+
+                // Pente : les rochers s'accumulent sur les talus.
+                float e = 1.0f;
+                float xl = Math.max(0f, localX - e), xr = Math.min(size, localX + e);
+                float zl = Math.max(0f, localZ - e), zr = Math.min(size, localZ + e);
+                float dhx = (sampleTerrainHeight(heights, heightSide, subdivisions, terrainStep, xl, localZ)
+                        - sampleTerrainHeight(heights, heightSide, subdivisions, terrainStep, xr, localZ)) / (xr - xl);
+                float dhz = (sampleTerrainHeight(heights, heightSide, subdivisions, terrainStep, localX, zl)
+                        - sampleTerrainHeight(heights, heightSide, subdivisions, terrainStep, localX, zr)) / (zr - zl);
+                float flatness = 1f / (float) Math.sqrt(dhx * dhx + 1f + dhz * dhz);   // 1 = plat
+                float probability = baseProbability * field * 3f * (1f + 3f * (1f - flatness));
+                if (acceptance >= Math.min(1f, probability)) continue;
+
+                float radius;
+                if (sizePick < 0.20f) radius = 0.9f + 1.3f * sizeRoll;          // bloc
+                else if (sizePick < 0.55f) radius = 0.35f + 0.45f * sizeRoll;   // rocher moyen
+                else radius = 0.08f + 0.17f * sizeRoll;                         // caillou
+                radius *= sizeScale;
+
+                // Mousse seulement sur sol herbeux et assez haut au-dessus de l'eau.
+                float moss = y > waterHeight + 1.2f ? generator.getGrassDensity(worldX, worldZ) : 0f;
+                placeRock(out, shapeNoise, rockSeed, heights, heightSide, subdivisions, terrainStep, size,
+                        localX, localZ, radius, moss);
+
+                if (radius >= 0.25f * sizeScale) {
+                    int companions = 2 + random.nextInt(5);
+                    for (int i = 0; i < companions; i++) {
+                        float angle = random.nextFloat() * TWO_PI;
+                        float distance = radius * (1.1f + 1.6f * random.nextFloat());
+                        float smallRadius = (0.05f + 0.17f * random.nextFloat()) * sizeScale;
+                        long smallSeed = random.nextLong();
+                        float px = localX + (float) Math.cos(angle) * distance;
+                        float pz = localZ + (float) Math.sin(angle) * distance;
+                        if (px < 0f || pz < 0f || px >= size || pz >= size) continue;
+                        float py = sampleTerrainHeight(heights, heightSide, subdivisions, terrainStep, px, pz);
+                        if (py < waterHeight + 0.1f) continue;
+                        placeRock(out, shapeNoise, smallSeed, heights, heightSide, subdivisions, terrainStep, size,
+                                px, pz, smallRadius, moss);
+                    }
+                }
+            }
+        }
+        return out.isEmpty() ? null : out.build();
+    }
+
+    /** Pose un rocher sur le terrain : le plus bas des 5 points d'appui, puis enfoncé d'un tiers. */
+    private static void placeRock(RockShape.Buffers out, PerlinNoise noise, long seed, float[] heights,
+                                  int heightSide, int subdivisions, float terrainStep, int size,
+                                  float x, float z, float radius, float moss) {
+        float reach = radius * 0.7f;
+        float ground = sampleTerrainHeight(heights, heightSide, subdivisions, terrainStep, x, z);
+        float[][] offsets = {{reach, 0}, {-reach, 0}, {0, reach}, {0, -reach}};
+        for (float[] o : offsets) {
+            float sx = Math.max(0f, Math.min(size, x + o[0])), sz = Math.max(0f, Math.min(size, z + o[1]));
+            ground = Math.min(ground, sampleTerrainHeight(heights, heightSide, subdivisions, terrainStep, sx, sz));
+        }
+        RockShape.add(out, noise, seed, x, ground + radius * 0.12f, z, radius, moss);
     }
 
     private static final float TWO_PI = (float) (Math.PI * 2.0);
-    private static final int VERTICES_PER_TUFT = 8;
+    private static final int VERTICES_PER_TUFT = 12;   // 2 plans × 3 rangées de 2 sommets
+    private static final int FLOWER_COLORS = 6;          // palette du shader : blanc, jaune, rose, violet, rouge, bleu
+    private static final int VARIANTS = 4;               // motifs de touffe dans l'atlas (GrassTexture)
 
     /**
      * Touffes d'herbe d'un chunk. Calcul pur et déterministe (seed du monde + coordonnées du chunk) :
      * un chunk régénéré après déchargement retrouve exactement la même herbe.
-     * Une touffe = 2 quads croisés portant plusieurs brins (voir {@link GrassTexture}).
+     * Une touffe = 2 plans croisés, chacun courbé en 2 segments (retombée des brins), portant
+     * plusieurs brins d'un des {@value #VARIANTS} motifs de {@link GrassTexture}.
      * Grille jitterée d'une touffe par cellule de 1/sqrt(density) mètres.
      */
     static GrassData generateGrass(int chunkX, int chunkZ, TerrainGenerator generator,
                                    float[] heights, int heightSide, int size, int subdivisions,
-                                   float waterHeight, float tuftsPerSquareMeter) {
+                                   float waterHeight, float tuftsPerSquareMeter, float flowerAmount) {
         final float cellSize = (float) (1.0 / Math.sqrt(tuftsPerSquareMeter));
         final int cells = (int) Math.ceil(size / cellSize);
         final float terrainStep = (float) size / subdivisions;
@@ -312,35 +458,58 @@ public final class TerrainChunk {
                 if (random.nextFloat() >= smooth(0.6f, 0.85f, ny)) continue;
 
                 float dry = generator.getGrassDryness(worldX, worldZ);
+                float deep = generator.getGrassDeepness(worldX, worldZ);
                 float lush = 1f - dry;
                 float angle = random.nextFloat() * TWO_PI;
                 float halfWidth = 0.5f * (0.62f + 0.40f * random.nextFloat()) * (0.85f + 0.30f * lush);
                 float height = (0.38f + 0.42f * random.nextFloat()) * (0.75f + 0.25f * grassWeight)
                         * (0.85f + 0.25f * lush);
-                float leanAngle = random.nextFloat() * TWO_PI;
-                float lean = height * (0.05f + 0.18f * random.nextFloat());
                 float phase = random.nextFloat();
                 float bright = 0.72f + 0.48f * random.nextFloat();
-                float r = (1f + 0.35f * dry) * bright;
-                float g = (1f + 0.05f * dry) * bright;
-                float b = (1f - 0.45f * dry) * bright;
+                // Même palette que le sol : jaunie d'un côté, plus profonde et bleutée de l'autre.
+                float r = (1f + 0.35f * dry - 0.30f * deep) * bright;
+                float g = (1f + 0.05f * dry - 0.12f * deep) * bright;
+                float b = (1f - 0.45f * dry + 0.05f * deep) * bright;
+
+                // Fleurs : la touffe fleurit selon le Perlin des prairies fleuries ; sa couleur suit le
+                // Perlin des teintes (plaques de même couleur), avec une fleur d'une autre couleur sur cinq.
+                float flowerChance = flowerAmount * (0.04f + 0.96f * generator.getFlowerField(worldX, worldZ));
+                boolean flowering = random.nextFloat() < flowerChance;
+                int palette = Math.min(FLOWER_COLORS - 1, (int) (generator.getFlowerHue(worldX, worldZ) * FLOWER_COLORS));
+                if (random.nextFloat() < 0.2f) palette = random.nextInt(FLOWER_COLORS);
+                float jitter = 0.99f * random.nextFloat();     // variation de luminosité dans la palette
+                out.flowers(palette + jitter, flowering ? 1f : 0f);
 
                 float baseY = y - 0.03f;                 // légèrement enterrée : pas de jour sur les pentes
-                float topY = baseY + height;
-                float leanX = (float) Math.cos(leanAngle) * lean, leanZ = (float) Math.sin(leanAngle) * lean;
                 minY = Math.min(minY, baseY);
-                maxY = Math.max(maxY, topY);
                 for (int plane = 0; plane < 2; plane++) {
-                    float planeAngle = angle + plane * (float) (Math.PI * 0.5);
-                    float dx = (float) Math.cos(planeAngle) * halfWidth;
-                    float dz = (float) Math.sin(planeAngle) * halfWidth;
+                    // Plans presque perpendiculaires, jamais exactement : pas de croix régulière visible.
+                    float planeAngle = angle + plane * (float) (Math.PI * 0.5) + (random.nextFloat() - 0.5f) * 0.4f;
+                    float planeWidth = halfWidth * (0.9f + 0.2f * random.nextFloat());
+                    float dx = (float) Math.cos(planeAngle) * planeWidth;
+                    float dz = (float) Math.sin(planeAngle) * planeWidth;
+                    // Chaque plan retombe dans sa propre direction : les brins forment une fontaine,
+                    // ce qui garde une surface visible même vue du dessus.
+                    float leanAngle = random.nextFloat() * TWO_PI;
+                    float lean = height * (0.10f + 0.30f * random.nextFloat());
+                    float lx = (float) Math.cos(leanAngle) * lean, lz = (float) Math.sin(leanAngle) * lean;
+                    float topY = baseY + (float) Math.sqrt(height * height - lean * lean);   // longueur conservée
+                    float midY = baseY + 0.5f * (topY - baseY);
+                    maxY = Math.max(maxY, topY);
+                    float variant = random.nextInt(VARIANTS);
+                    // Retombée parabolique : à mi-hauteur le brin n'a fait que 1/4 de son déport.
+                    float mx = lx * 0.25f, mz = lz * 0.25f;
                     int base = out.vertexCount();
-                    out.vertex(localX - dx, baseY, localZ - dz, nx, ny, nz, r, g, b, phase, 0f, 0f, height);
-                    out.vertex(localX + dx, baseY, localZ + dz, nx, ny, nz, r, g, b, phase, 1f, 0f, height);
-                    out.vertex(localX - dx + leanX, topY, localZ - dz + leanZ, nx, ny, nz, r, g, b, phase, 0f, 1f, height);
-                    out.vertex(localX + dx + leanX, topY, localZ + dz + leanZ, nx, ny, nz, r, g, b, phase, 1f, 1f, height);
+                    out.vertex(localX - dx, baseY, localZ - dz, nx, ny, nz, r, g, b, phase, 0f, 0f, height, variant, baseY);
+                    out.vertex(localX + dx, baseY, localZ + dz, nx, ny, nz, r, g, b, phase, 1f, 0f, height, variant, baseY);
+                    out.vertex(localX - dx + mx, midY, localZ - dz + mz, nx, ny, nz, r, g, b, phase, 0f, 0.5f, height, variant, baseY);
+                    out.vertex(localX + dx + mx, midY, localZ + dz + mz, nx, ny, nz, r, g, b, phase, 1f, 0.5f, height, variant, baseY);
+                    out.vertex(localX - dx + lx, topY, localZ - dz + lz, nx, ny, nz, r, g, b, phase, 0f, 1f, height, variant, baseY);
+                    out.vertex(localX + dx + lx, topY, localZ + dz + lz, nx, ny, nz, r, g, b, phase, 1f, 1f, height, variant, baseY);
                     out.triangle(base, base + 1, base + 2);
                     out.triangle(base + 2, base + 1, base + 3);
+                    out.triangle(base + 2, base + 3, base + 4);
+                    out.triangle(base + 4, base + 3, base + 5);
                 }
             }
         }
@@ -349,9 +518,10 @@ public final class TerrainChunk {
 
     /** Tampons extensibles : la taille finale dépend du nombre de touffes acceptées. */
     private static final class GrassBuffers {
-        private float[] positions, normals, colors, uvs, params;
+        private float[] positions, normals, colors, uvs, params, flowers;
         private int[] indices;
         private int vertices, indexCount;
+        private float flowerColor, flowerOn;   // appliqués aux sommets suivants
 
         GrassBuffers(int initialVertices) {
             allocate(Math.max(initialVertices, VERTICES_PER_TUFT));
@@ -362,8 +532,9 @@ public final class TerrainChunk {
             normals = new float[capacity * 3];
             colors = new float[capacity * 4];
             uvs = new float[capacity * 2];
-            params = new float[capacity * 2];
-            indices = new int[capacity / 4 * 6 + 12];
+            params = new float[capacity * 3];
+            flowers = new float[capacity * 2];
+            indices = new int[capacity * 2 + 12];
         }
 
         private void ensure(int extraVertices) {
@@ -374,21 +545,27 @@ public final class TerrainChunk {
             normals = java.util.Arrays.copyOf(normals, grown * 3);
             colors = java.util.Arrays.copyOf(colors, grown * 4);
             uvs = java.util.Arrays.copyOf(uvs, grown * 2);
-            params = java.util.Arrays.copyOf(params, grown * 2);
-            indices = java.util.Arrays.copyOf(indices, grown / 4 * 6 + 12);
+            params = java.util.Arrays.copyOf(params, grown * 3);
+            flowers = java.util.Arrays.copyOf(flowers, grown * 2);
+            indices = java.util.Arrays.copyOf(indices, grown * 2 + 12);
         }
 
         int vertexCount() { return vertices; }
 
+        /** Fleurs de la touffe en cours : couleur (index de palette + variation) et drapeau fleuri. */
+        void flowers(float colorIndex, float on) { flowerColor = colorIndex; flowerOn = on; }
+
         void vertex(float x, float y, float z, float nx, float ny, float nz,
-                    float r, float g, float b, float phase, float u, float v, float height) {
+                    float r, float g, float b, float phase, float u, float v, float height,
+                    float variant, float baseY) {
             ensure(1);
             int p = vertices * 3, c = vertices * 4, t = vertices * 2;
             positions[p] = x; positions[p + 1] = y; positions[p + 2] = z;
             normals[p] = nx; normals[p + 1] = ny; normals[p + 2] = nz;
             colors[c] = r; colors[c + 1] = g; colors[c + 2] = b; colors[c + 3] = phase;
             uvs[t] = u; uvs[t + 1] = v;
-            params[t] = height; params[t + 1] = 0f;
+            params[p] = height; params[p + 1] = variant; params[p + 2] = baseY;
+            flowers[t] = flowerColor; flowers[t + 1] = flowerOn;
             vertices++;
         }
 
@@ -406,19 +583,21 @@ public final class TerrainChunk {
             colorBuffer.put(colors, 0, vertices * 4).flip();
             FloatBuffer uvBuffer = BufferUtils.createFloatBuffer(vertices * 2);
             uvBuffer.put(uvs, 0, vertices * 2).flip();
-            FloatBuffer paramBuffer = BufferUtils.createFloatBuffer(vertices * 2);
-            paramBuffer.put(params, 0, vertices * 2).flip();
+            FloatBuffer paramBuffer = BufferUtils.createFloatBuffer(vertices * 3);
+            paramBuffer.put(params, 0, vertices * 3).flip();
+            FloatBuffer flowerBuffer = BufferUtils.createFloatBuffer(vertices * 2);
+            flowerBuffer.put(flowers, 0, vertices * 2).flip();
             if (vertices <= 65536) {
                 ShortBuffer shortBuffer = BufferUtils.createShortBuffer(indexCount);
                 for (int i = 0; i < indexCount; i++) shortBuffer.put((short) indices[i]);
                 shortBuffer.flip();
                 return new GrassData(positionBuffer, normalBuffer, colorBuffer, uvBuffer, paramBuffer,
-                        null, shortBuffer, indexCount, minY, maxY);
+                        flowerBuffer, null, shortBuffer, indexCount, minY, maxY);
             }
             IntBuffer indexBuffer = BufferUtils.createIntBuffer(indexCount);
             indexBuffer.put(indices, 0, indexCount).flip();
             return new GrassData(positionBuffer, normalBuffer, colorBuffer, uvBuffer, paramBuffer,
-                    indexBuffer, null, indexCount, minY, maxY);
+                    flowerBuffer, indexBuffer, null, indexCount, minY, maxY);
         }
     }
 

@@ -59,6 +59,7 @@ public final class ChunkLoader {
     private final Camera camera;
     private final Material material;
     private final Material grassMaterial;
+    private final Material rockMaterial;
     private final VertexBuffer sharedIndices;
     private final ExecutorService executor;
 
@@ -79,11 +80,12 @@ public final class ChunkLoader {
     private boolean grassDirty = true;
 
     public ChunkLoader(Node terrainNode, Camera camera, Material material, Material grassMaterial,
-                       TerrainGenerator generator, GameConfig config) {
+                       Material rockMaterial, TerrainGenerator generator, GameConfig config) {
         this.terrainNode = terrainNode;
         this.camera = camera;
         this.material = material;
         this.grassMaterial = grassMaterial;
+        this.rockMaterial = rockMaterial;
         this.generator = generator;
         this.config = config;
         this.renderDistance = config.renderDistance;
@@ -150,9 +152,11 @@ public final class ChunkLoader {
             if (r.data == null) continue;
             int x = unpackX(r.key), z = unpackZ(r.key);
             if (!inRange(x, z, cx, cz)) continue;     // la caméra s'est éloignée entre-temps
-            TerrainChunk chunk = new TerrainChunk(x, z, r.data, material, sharedIndices, config.chunkSize);
+            TerrainChunk chunk = new TerrainChunk(x, z, r.data, material, rockMaterial, sharedIndices,
+                    config.chunkSize);
             loaded.put(r.key, chunk);
             terrainNode.attachChild(chunk.getGeometry());
+            if (chunk.getRockGeometry() != null) terrainNode.attachChild(chunk.getRockGeometry());
             grassDirty = true;
             built++;
         }
@@ -164,6 +168,7 @@ public final class ChunkLoader {
             Map.Entry<Long, TerrainChunk> e = it.next();
             if (!inRange(unpackX(e.getKey()), unpackZ(e.getKey()), cx, cz)) {
                 e.getValue().getGeometry().removeFromParent();
+                if (e.getValue().getRockGeometry() != null) e.getValue().getRockGeometry().removeFromParent();
                 e.getValue().clearGrass();
                 it.remove();
             }
@@ -226,12 +231,12 @@ public final class ChunkLoader {
             final int heightSide = chunk.getHeightSide();
             final int x = unpackX(key), z = unpackZ(key);
             final int size = config.chunkSize, sub = config.subdivisions;
-            final float waterH = config.waterHeight, density = config.grassDensity;
+            final float waterH = config.waterHeight, density = config.grassDensity, flowers = config.grassFlowers;
             executor.execute(() -> {
                 TerrainChunk.GrassData data = null;
                 try {
                     data = TerrainChunk.generateGrass(x, z, terrainGenerator, heights, heightSide,
-                            size, sub, waterH, density);
+                            size, sub, waterH, density, flowers);
                 } catch (Throwable t) {
                     LOG.log(Level.SEVERE, "Échec de génération de l'herbe " + x + "," + z, t);
                 }
@@ -265,10 +270,11 @@ public final class ChunkLoader {
             final int x = unpackX(key), z = unpackZ(key);
             final int size = config.chunkSize, sub = config.subdivisions;
             final float waterH = config.waterHeight;
+            final float rockDensity = config.rockDensity, rockScale = config.rockSizeScale;
             executor.execute(() -> {
                 TerrainChunk.Data data = null;
                 try {
-                    data = TerrainChunk.generate(x, z, gen3d, size, sub, waterH);
+                    data = TerrainChunk.generate(x, z, gen3d, size, sub, waterH, rockDensity, rockScale);
                 } catch (Throwable t) {
                     LOG.log(Level.SEVERE, "Échec de génération du chunk " + x + "," + z, t);
                 }

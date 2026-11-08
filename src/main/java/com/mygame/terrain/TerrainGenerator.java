@@ -8,7 +8,7 @@ public final class TerrainGenerator {
 
     private final long seed;
     private final PerlinNoise continental, islands, details, dunes, warp, tint;
-    private final PerlinNoise grass;
+    private final PerlinNoise grass, deep, rockField, rockShape, flowerField, flowerHue;
 
     public TerrainGenerator(long seed) {
         this.seed = seed;
@@ -19,6 +19,11 @@ public final class TerrainGenerator {
         warp = new PerlinNoise(seed + 4001L);
         tint = new PerlinNoise(seed + 5003L);
         grass = new PerlinNoise(seed + 6007L);
+        deep = new PerlinNoise(seed + 7001L);
+        rockField = new PerlinNoise(seed + 8009L);
+        rockShape = new PerlinNoise(seed + 9011L);
+        flowerField = new PerlinNoise(seed + 10007L);
+        flowerHue = new PerlinNoise(seed + 11003L);
     }
 
     public float getHeight(double x, double z) {
@@ -57,11 +62,51 @@ public final class TerrainGenerator {
         return (float) (clearing * (.82 + .18 * (value + 1.0) * .5));
     }
 
-    /** Sécheresse de l'herbe (0 = verte, 1 = jaunie) : grandes zones + petites taches. */
+    /**
+     * Ton du vert (0..1) : 0 = vert profond, 0,5 = vert de base, 1 = vert jaune. Un seul champ de Perlin
+     * continu (grandes plages + variation plus fine) : tout le sol herbeux participe au dégradé.
+     */
+    public float getGrassTone(double x, double z) {
+        double n = .7 * deep.fractal(x * .007, z * .007, 3, .5, 2) + .3 * deep.fractal(x * .03, z * .03, 2, .5, 2);
+        return (float) (.5 + .5 * Math.max(-1.0, Math.min(1.0, n * 2.6)));
+    }
+
+    /** Part de vert profond (0..1), dérivée du ton. */
+    public float getGrassDeepness(double x, double z) {
+        return (float) (1.0 - smoothstep(.05, .5, getGrassTone(x, z)));
+    }
+
+    /** Part de vert jaune / herbe sèche (0..1), dérivée du ton. */
     public float getGrassDryness(double x, double z) {
-        double large = smoothstep(.12, .55, getTint(x, z));
-        double patches = smoothstep(.15, .7, grass.fractal(x * .09 + 311, z * .09 - 97, 2, .5, 2));
-        return (float) Math.min(1.0, large * .75 + patches * .35);
+        return (float) smoothstep(.5, .95, getGrassTone(x, z));
+    }
+
+    /** Prairies fleuries (0..1) : plaques d'une trentaine de mètres ; hors plaque, peu de fleurs. */
+    public float getFlowerField(double x, double z) {
+        return (float) smoothstep(-.22, .32, flowerField.fractal(x * .03, z * .03, 3, .5, 2));
+    }
+
+    /** Couleur dominante des fleurs (0..1) : plaques d'une vingtaine de mètres de même couleur. */
+    public float getFlowerHue(double x, double z) {
+        double n = flowerHue.fractal(x * .045, z * .045, 2, .5, 2);
+        return (float) (.5 + .5 * Math.max(-1.0, Math.min(1.0, n * 2.4)));
+    }
+
+    /** Zones rocheuses (0..1) : de larges plaques, la plupart du terrain n'a presque aucun rocher. */
+    public float getRockField(double x, double z) {
+        return (float) smoothstep(-.05, .45, rockField.fractal(x * .016, z * .016, 3, .5, 2));
+    }
+
+    /** Bruit 3D qui donne leur forme aux rochers (dépend de la seed du monde). */
+    PerlinNoise getRockShapeNoise() {
+        return rockShape;
+    }
+
+    long getRockChunkSeed(int chunkX, int chunkZ) {
+        long value = seed ^ 0xD1B54A32D192ED03L;
+        value = (value ^ chunkX) * 0xBF58476D1CE4E5B9L;
+        value = (value ^ chunkZ) * 0x94D049BB133111EBL;
+        return value ^ (value >>> 29);
     }
 
     long getGrassChunkSeed(int chunkX, int chunkZ) {

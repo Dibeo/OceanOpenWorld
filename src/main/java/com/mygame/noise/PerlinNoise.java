@@ -46,6 +46,26 @@ public final class PerlinNoise {
                 (float) (radiusY * Math.sin(angleY)));
     }
 
+    /** Bruit de Perlin 3D (volumes : rochers, etc.). Mêmes garanties de déterminisme que la version 2D. */
+    public double noise(double x, double y, double z) {
+        return noise.GetNoise((float) x, (float) y, (float) z);
+    }
+
+    /** fBm 3D normalisé par la somme des amplitudes (valeurs d'environ ±0,6). */
+    public double fractal(double x, double y, double z, int octaves, double persistence, double lacunarity) {
+        if (octaves < 1) {
+            throw new IllegalArgumentException("Octaves must be positive");
+        }
+        double total = 0, amplitude = 1, frequency = 1, sum = 0;
+        for (int i = 0; i < octaves; i++) {
+            total += noise(x * frequency, y * frequency, z * frequency) * amplitude;
+            sum += amplitude;
+            amplitude *= persistence;
+            frequency *= lacunarity;
+        }
+        return total / sum;
+    }
+
     public double fractal(double x, double y, int octaves, double persistence, double lacunarity) {
         if (octaves < 1) {
             throw new IllegalArgumentException("Octaves must be positive");

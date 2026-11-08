@@ -22,7 +22,8 @@ public final class GameConfig {
     public final float windChangeSpeed, windStrengthVariation;
     public final int reflectionMapSize;
     public final float sunIntensity;
-    public final float grassDensity, grassDistance;
+    public final float grassDensity, grassDistance, grassFlowers;
+    public final float rockDensity, rockSizeScale;
     public final boolean cloudsEnabled;
     public final float cloudAltitude, cloudThickness, cloudCoverage, cloudDensity, cloudWindSpeed, cloudTileMeters;
     public final int cloudTextureSize, cloudSteps, cloudLightSteps;
@@ -36,6 +37,7 @@ public final class GameConfig {
         Element lighting = element(root, "lighting");
         Element clouds = element(root, "clouds");
         Element grass = element(root, "grass");
+        Element rocks = element(root, "rocks");
 
         seed = Long.parseLong(required(world, "seed"));
         chunkSize = positiveInt(terrain, "chunkSize");
@@ -61,8 +63,16 @@ public final class GameConfig {
         }
         reflectionMapSize = positiveInt(water, "reflectionMapSize");
         sunIntensity = nonnegativeFloat(lighting, "sunIntensity");
+        rockDensity = nonnegativeFloat(rocks, "density");
+        rockSizeScale = positiveFloat(rocks, "sizeScale");
+        if (rockDensity > 50f) throw new IllegalArgumentException("rocks.density doit être <= 50");
+        if (rockSizeScale < 0.2f || rockSizeScale > 4f) {
+            throw new IllegalArgumentException("rocks.sizeScale doit être dans [0.2, 4]");
+        }
         grassDensity = positiveFloat(grass, "density");
         grassDistance = positiveFloat(grass, "distance");
+        grassFlowers = nonnegativeFloat(grass, "flowers");
+        if (grassFlowers > 1f) throw new IllegalArgumentException("grass.flowers doit être <= 1");
         if (grassDensity > 16f) throw new IllegalArgumentException("grass.density doit être <= 16");
         if (grassDistance < 10f || grassDistance > 400f) {
             throw new IllegalArgumentException("grass.distance doit être dans [10, 400]");
