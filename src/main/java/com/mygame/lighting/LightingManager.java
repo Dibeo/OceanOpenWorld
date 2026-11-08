@@ -53,7 +53,7 @@ public final class LightingManager {
     public void setSunDirection(Vector3f direction) {
         ensureInitialized();
         if (direction == null || direction.lengthSquared() < 1e-8f) {
-            throw new IllegalArgumentException("La direction du soleil doit être non nulle.");
+            throw new IllegalArgumentException("Sun direction must be non-zero.");
         }
         sun.setDirection(direction.normalize()); // does not modify the supplied vector
         sunVersion++;
@@ -69,7 +69,7 @@ public final class LightingManager {
     public void setSunIntensity(float intensity) {
         ensureInitialized();
         if (intensity < 0f || !Float.isFinite(intensity)) {
-            throw new IllegalArgumentException("Intensité solaire invalide.");
+            throw new IllegalArgumentException("Invalid solar intensity.");
         }
         sun.setColor(baseSunColor.mult(intensity));
     }
@@ -123,7 +123,7 @@ public final class LightingManager {
 
     private void ensureInitialized() {
         if (sun == null) {
-            throw new IllegalStateException("LightingManager.initialize() doit être appelé d'abord.");
+            throw new IllegalStateException("LightingManager.initialize() must be called first.");
         }
     }
 }

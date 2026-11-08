@@ -120,23 +120,23 @@ public final class GameConfig {
         windChangeSpeed = positiveFloat(water, "windChangeSpeed");
         windStrengthVariation = nonnegativeFloat(water, "windStrengthVariation");
         if (windStrengthVariation > 1f) {
-            throw new IllegalArgumentException("water.windStrengthVariation doit être <= 1");
+            throw new IllegalArgumentException("water.windStrengthVariation must be <= 1");
         }
         reflectionMapSize = positiveInt(water, "reflectionMapSize");
         sunIntensity = nonnegativeFloat(lighting, "sunIntensity");
         rockDensity = nonnegativeFloat(rocks, "density");
         rockSizeScale = positiveFloat(rocks, "sizeScale");
-        if (rockDensity > 50f) throw new IllegalArgumentException("rocks.density doit être <= 50");
+        if (rockDensity > 50f) throw new IllegalArgumentException("rocks.density must be <= 50");
         if (rockSizeScale < 0.2f || rockSizeScale > 4f) {
-            throw new IllegalArgumentException("rocks.sizeScale doit être dans [0.2, 4]");
+            throw new IllegalArgumentException("rocks.sizeScale must be in [0.2, 4]");
         }
         grassDensity = positiveFloat(grass, "density");
         grassDistance = positiveFloat(grass, "distance");
         grassFlowers = nonnegativeFloat(grass, "flowers");
-        if (grassFlowers > 1f) throw new IllegalArgumentException("grass.flowers doit être <= 1");
-        if (grassDensity > 16f) throw new IllegalArgumentException("grass.density doit être <= 16");
+        if (grassFlowers > 1f) throw new IllegalArgumentException("grass.flowers must be <= 1");
+        if (grassDensity > 16f) throw new IllegalArgumentException("grass.density must be <= 16");
         if (grassDistance < 10f || grassDistance > 400f) {
-            throw new IllegalArgumentException("grass.distance doit être dans [10, 400]");
+            throw new IllegalArgumentException("grass.distance must be in [10, 400]");
         }
         cloudsEnabled = bool(clouds, "enabled");
         cloudAltitude = positiveFloat(clouds, "altitude");
@@ -148,17 +148,17 @@ public final class GameConfig {
         cloudTextureSize = positiveInt(clouds, "textureSize");
         cloudSteps = positiveInt(clouds, "steps");
         cloudLightSteps = positiveInt(clouds, "lightSteps");
-        if (cloudCoverage > 1f) throw new IllegalArgumentException("clouds.coverage doit être <= 1");
+        if (cloudCoverage > 1f) throw new IllegalArgumentException("clouds.coverage must be <= 1");
         if (cloudTextureSize < 256 || cloudTextureSize > 1024 || Integer.bitCount(cloudTextureSize) != 1) {
-            throw new IllegalArgumentException("clouds.textureSize doit valoir 256, 512 ou 1024");
+            throw new IllegalArgumentException("clouds.textureSize must be 256, 512, or 1024");
         }
-        if (cloudSteps < 8 || cloudSteps > 128) throw new IllegalArgumentException("clouds.steps doit être dans [8, 128]");
-        if (cloudLightSteps > 8) throw new IllegalArgumentException("clouds.lightSteps doit être <= 8");
-        if (cameraFar <= 1f) throw new IllegalArgumentException("camera.farPlane doit être > 1");
-        if (renderDistance > 64) throw new IllegalArgumentException("renderDistance trop élevé (max 64)");
-        if (subdivisions > 256) throw new IllegalArgumentException("subdivisions trop élevé (max 256)");
+        if (cloudSteps < 8 || cloudSteps > 128) throw new IllegalArgumentException("clouds.steps must be in [8, 128]");
+        if (cloudLightSteps > 8) throw new IllegalArgumentException("clouds.lightSteps must be <= 8");
+        if (cameraFar <= 1f) throw new IllegalArgumentException("camera.farPlane must be > 1");
+        if (renderDistance > 64) throw new IllegalArgumentException("renderDistance is too high (max 64)");
+        if (subdivisions > 256) throw new IllegalArgumentException("subdivisions is too high (max 256)");
         if (chunkSize % subdivisions != 0) {
-            throw new IllegalArgumentException("chunkSize doit être divisible par subdivisions pour assurer les bordures");
+            throw new IllegalArgumentException("chunkSize must be divisible by subdivisions to preserve chunk borders");
         }
     }
 
@@ -172,7 +172,7 @@ public final class GameConfig {
     public static GameConfig load(String filename) {
         Path path = Paths.get(filename).toAbsolutePath().normalize();
         if (!Files.isRegularFile(path)) {
-            throw new IllegalStateException("Configuration introuvable : " + path);
+            throw new IllegalStateException("Configuration file not found: " + path);
         }
         try (InputStream in = Files.newInputStream(path)) {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -186,47 +186,47 @@ public final class GameConfig {
             factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
             Document document = factory.newDocumentBuilder().parse(in);
             if (!"gameConfig".equals(document.getDocumentElement().getTagName())) {
-                throw new IllegalArgumentException("Racine XML attendue : gameConfig");
+                throw new IllegalArgumentException("Expected XML root: gameConfig");
             }
             return new GameConfig(document.getDocumentElement());
         } catch (Exception e) {
-            throw new IllegalStateException("Lecture de " + path + " impossible : " + e.getMessage(), e);
+            throw new IllegalStateException("Unable to read " + path + ": " + e.getMessage(), e);
         }
     }
 
     private static Element element(Element parent, String name) {
         var matches = parent.getElementsByTagName(name);
-        if (matches.getLength() != 1) throw new IllegalArgumentException("Elément XML requis : " + name);
+        if (matches.getLength() != 1) throw new IllegalArgumentException("Required XML element: " + name);
         return (Element) matches.item(0);
     }
     private static String required(Element e, String name) {
         String value = e.getAttribute(name);
-        if (value.isEmpty()) throw new IllegalArgumentException(e.getTagName() + "." + name + " requis");
+        if (value.isEmpty()) throw new IllegalArgumentException(e.getTagName() + "." + name + " is required");
         return value;
     }
     private static int positiveInt(Element e, String key) {
         int v = Integer.parseInt(required(e, key));
-        if (v < 1) throw new IllegalArgumentException(key + " doit être > 0");
+        if (v < 1) throw new IllegalArgumentException(key + " must be > 0");
         return v;
     }
     private static int nonnegativeInt(Element e, String key) {
         int v = Integer.parseInt(required(e, key));
-        if (v < 0) throw new IllegalArgumentException(key + " doit être >= 0");
+        if (v < 0) throw new IllegalArgumentException(key + " must be >= 0");
         return v;
     }
     private static float positiveFloat(Element e, String key) {
         float v = Float.parseFloat(required(e, key));
-        if (!Float.isFinite(v) || v <= 0) throw new IllegalArgumentException(key + " doit être fini et > 0");
+        if (!Float.isFinite(v) || v <= 0) throw new IllegalArgumentException(key + " must be finite and > 0");
         return v;
     }
     private static float nonnegativeFloat(Element e, String key) {
         float v = Float.parseFloat(required(e, key));
-        if (!Float.isFinite(v) || v < 0) throw new IllegalArgumentException(key + " doit être fini et >= 0");
+        if (!Float.isFinite(v) || v < 0) throw new IllegalArgumentException(key + " must be finite and >= 0");
         return v;
     }
     private static boolean bool(Element e, String key) {
         String v = required(e, key);
-        if (!v.equals("true") && !v.equals("false")) throw new IllegalArgumentException(key + " doit être true ou false");
+        if (!v.equals("true") && !v.equals("false")) throw new IllegalArgumentException(key + " must be true or false");
         return Boolean.parseBoolean(v);
     }
 }

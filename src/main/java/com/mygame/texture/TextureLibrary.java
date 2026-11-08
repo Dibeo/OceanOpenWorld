@@ -29,10 +29,10 @@ public final class TextureLibrary {
      */
     public static TextureLibrary fromClasspath(String resource) {
         try (InputStream in = TextureLibrary.class.getResourceAsStream(resource)) {
-            if (in == null) throw new IllegalStateException("Ressource introuvable : " + resource);
+            if (in == null) throw new IllegalStateException("Resource not found: " + resource);
             return new TextureLibrary(TextureDefinitionLoader.load(in, resource));
         } catch (IOException e) {
-            throw new IllegalStateException("Lecture de " + resource + " impossible : " + e.getMessage(), e);
+            throw new IllegalStateException("Unable to read " + resource + ": " + e.getMessage(), e);
         }
     }
 
@@ -81,7 +81,7 @@ public final class TextureLibrary {
 
     private TextureDefinition def(String name) {
         TextureDefinition d = definitions.get(name);
-        if (d == null) throw new IllegalArgumentException("Texture inconnue dans textures.xml : " + name);
+        if (d == null) throw new IllegalArgumentException("Unknown texture in textures.xml: " + name);
         return d;
     }
 

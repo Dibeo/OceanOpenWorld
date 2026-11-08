@@ -244,7 +244,7 @@ public final class ChunkLoader {
                     data = TerrainChunk.generateGrass(x, z, terrainGenerator, heights, heightSide,
                             size, sub, waterH, density, flowers);
                 } catch (Throwable t) {
-                    LOG.log(Level.SEVERE, "Échec de génération de l'herbe " + x + "," + z, t);
+                    LOG.log(Level.SEVERE, "Failed to generate grass " + x + "," + z, t);
                 }
                 grassReady.add(new GrassResult(key, gen, data));
             });
@@ -282,7 +282,7 @@ public final class ChunkLoader {
                 try {
                     data = TerrainChunk.generate(x, z, gen3d, size, sub, waterH, rockDensity, rockScale);
                 } catch (Throwable t) {
-                    LOG.log(Level.SEVERE, "Échec de génération du chunk " + x + "," + z, t);
+                    LOG.log(Level.SEVERE, "Failed to generate chunk " + x + "," + z, t);
                 }
                 ready.add(new Result(key, gen, data));
             });

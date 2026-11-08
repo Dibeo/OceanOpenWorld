@@ -149,7 +149,7 @@ public final class CloudManager {
             CompletableFuture<byte[]> done = pendingTexture;
             pendingTexture = null;
             if (done.isCompletedExceptionally()) {
-                LOG.log(Level.WARNING, "Génération des nuages échouée", done.exceptionNow());
+                LOG.log(Level.WARNING, "Cloud generation failed", done.exceptionNow());
             } else {
                 applyTexture(done.resultNow());
             }

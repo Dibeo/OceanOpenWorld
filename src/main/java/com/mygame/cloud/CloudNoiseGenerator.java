@@ -24,7 +24,7 @@ public final class CloudNoiseGenerator {
     private record Layer(Octave[] octaves, boolean billow) { }
 
     private static final LayerSpec[] SPECS = {
-            new LayerSpec(4, 5, 0.50, false, 0x52L),   // R : forme
+            new LayerSpec(4, 5, 0.50, false, 0x52L),   // R: shape
             new LayerSpec(2, 3, 0.55, false, 0x47L),   // G: weather
             new LayerSpec(8, 4, 0.50, true, 0x42L),    // B: detail 1
             new LayerSpec(16, 3, 0.50, true, 0x41L),   // A: detail 2
@@ -46,7 +46,7 @@ public final class CloudNoiseGenerator {
     public static byte[] generate(long seed, int size) {
         if (size < MIN_SIZE || size > MAX_SIZE || Integer.bitCount(size) != 1) {
             throw new IllegalArgumentException(
-                    "La taille doit être une puissance de 2 dans [" + MIN_SIZE + ", " + MAX_SIZE + "] : " + size);
+                    "Size must be a power of two in [" + MIN_SIZE + ", " + MAX_SIZE + "] : " + size);
         }
 
         Layer[] layers = new Layer[SPECS.length];

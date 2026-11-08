@@ -165,7 +165,7 @@ public class WorldScene extends Node {
 
     private void ensureInitialized() {
         if (!initialized) {
-            throw new IllegalStateException("WorldScene.initialize() doit être appelé d'abord.");
+            throw new IllegalStateException("WorldScene.initialize() must be called first.");
         }
     }
 

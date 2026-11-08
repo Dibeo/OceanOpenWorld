@@ -23,7 +23,7 @@ class RockGenerationTest {
                 if (rocks(seed, cx, cz, 2.5f) != null) return new int[] {cx, cz};
             }
         }
-        throw new AssertionError("aucun rocher trouvé");
+        throw new AssertionError("no rock found");
     }
 
     private static boolean same(FloatBuffer a, FloatBuffer b) {
@@ -37,8 +37,8 @@ class RockGenerationTest {
         int[] c = findRockyChunk(1L);
         RockShape.RockData a = rocks(1L, c[0], c[1], 2.5f), b = rocks(1L, c[0], c[1], 2.5f);
         assertTrue(same(a.positions, b.positions), "positions");
-        assertTrue(same(a.normals, b.normals), "normales");
-        assertTrue(same(a.colors, b.colors), "couleurs");
+        assertTrue(same(a.normals, b.normals), "normals");
+        assertTrue(same(a.colors, b.colors), "colors");
         assertEquals(a.indexCount, b.indexCount);
     }
 
@@ -60,12 +60,12 @@ class RockGenerationTest {
         int[] c = findRockyChunk(3L);
         RockShape.RockData r = rocks(3L, c[0], c[1], 2.5f);
         int vertices = r.positions.limit() / 3;
-        for (int i = 0; i < r.positions.limit(); i++) assertTrue(Float.isFinite(r.positions.get(i)), "position finie");
+        for (int i = 0; i < r.positions.limit(); i++) assertTrue(Float.isFinite(r.positions.get(i)), "finite position");
         for (int i = 0; i < vertices; i++) {
             float x = r.normals.get(i * 3), y = r.normals.get(i * 3 + 1), z = r.normals.get(i * 3 + 2);
-            assertTrue(Math.abs(Math.sqrt(x * x + y * y + z * z) - 1.0) < 1e-3, "normale unitaire");
+            assertTrue(Math.abs(Math.sqrt(x * x + y * y + z * z) - 1.0) < 1e-3, "unit normal");
             float ao = r.colors.get(i * 4 + 3);
-            assertTrue(ao >= 0f && ao <= 1.1f, "occlusion dans [0,1]");
+            assertTrue(ao >= 0f && ao <= 1.1f, "ambient occlusion in [0,1]");
         }
         assertTrue(r.indexCount % 3 == 0);
         // Rocks stay close to their chunk (maximum size is about 2.2 m, including pebbles).

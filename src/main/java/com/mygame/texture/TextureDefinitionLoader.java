@@ -42,18 +42,18 @@ final class TextureDefinitionLoader {
             Document doc = factory.newDocumentBuilder().parse(in);
             Element root = doc.getDocumentElement();
             if (!"textures".equals(root.getTagName())) {
-                throw new IllegalArgumentException("Racine XML attendue : textures");
+                throw new IllegalArgumentException("Expected XML root: textures");
             }
             Map<String, TextureDefinition> result = new LinkedHashMap<>();
             for (Element t : children(root, "texture")) {
                 TextureDefinition def = parseTexture(t);
                 if (result.put(def.name, def) != null) {
-                    throw new IllegalArgumentException("Texture en double : " + def.name);
+                    throw new IllegalArgumentException("Duplicate texture: " + def.name);
                 }
             }
             return result;
         } catch (Exception e) {
-            throw new IllegalStateException("Lecture de " + source + " impossible : " + e.getMessage(), e);
+            throw new IllegalStateException("Unable to read " + source + ": " + e.getMessage(), e);
         }
     }
 
@@ -61,15 +61,15 @@ final class TextureDefinitionLoader {
         String name = req(t, "name");
         int size = (int) num(t, "size", 256f);
         if (size < 16 || size > 1024 || (size & (size - 1)) != 0) {
-            throw new IllegalArgumentException(name + ".size doit être une puissance de 2 entre 16 et 1024");
+            throw new IllegalArgumentException(name + ".size must be a power of two between 16 and 1024");
         }
         float tile = num(t, "tileMeters", 4f);
-        if (tile <= 0f) throw new IllegalArgumentException(name + ".tileMeters doit être > 0");
+        if (tile <= 0f) throw new IllegalArgumentException(name + ".tileMeters must be > 0");
 
         MapSpec diffuse = parseMap(first(t, "diffuse"), name, false);
         MapSpec normal = parseMap(first(t, "normal"), name, true);
         if (diffuse == null && normal == null) {
-            throw new IllegalArgumentException(name + " : <diffuse> ou <normal> requis");
+            throw new IllegalArgumentException(name + " must define either <diffuse> or <normal>");
         }
         return new TextureDefinition(name, size, tile, diffuse, normal);
     }
@@ -78,7 +78,7 @@ final class TextureDefinitionLoader {
         if (e == null) return null;
         List<Layer> layers = new ArrayList<>();
         for (Element l : children(e, "layer")) layers.add(parseLayer(l, texName));
-        if (layers.isEmpty()) throw new IllegalArgumentException(texName + " : au moins un <layer> requis");
+        if (layers.isEmpty()) throw new IllegalArgumentException(texName + " must contain at least one <layer>");
         return new MapSpec(layers,
                 num(e, "base", 0.9f), num(e, "contrast", 1f), num(e, "strength", 6f),
                 num(e, "r", 1f), num(e, "g", 1f), num(e, "b", 1f));
@@ -89,7 +89,7 @@ final class TextureDefinitionLoader {
         try {
             type = LayerType.valueOf(req(l, "type").toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException(texName + " : type de layer inconnu '" + l.getAttribute("type") + "'");
+            throw new IllegalArgumentException(texName + " has unknown layer type '" + l.getAttribute("type") + "'");
         }
         float amp = num(l, "amplitude", 1f);
         int cells = (int) num(l, "cells", 8f);
@@ -101,11 +101,11 @@ final class TextureDefinitionLoader {
 
         if (type == LayerType.PERLIN) {
             if (cells < 1 || octaves < 1 || octaves > 8 || ((long) cells << (octaves - 1)) > 256) {
-                throw new IllegalArgumentException(texName + " : perlin exige cells>=1, 1<=octaves<=8 et cells*2^(octaves-1) <= 256");
+                throw new IllegalArgumentException(texName + " : perlin requires cells>=1, 1<=octaves<=8, and cells*2^(octaves-1) <= 256");
             }
         } else if (type == LayerType.RIPPLE) {
             if (frequency < 1 || warpCells < 1 || warpCells > 256) {
-                throw new IllegalArgumentException(texName + " : ripple exige frequency>=1 et 1<=warpCells<=256");
+                throw new IllegalArgumentException(texName + " : ripple requires frequency>=1 and 1<=warpCells<=256");
             }
         }
         return new Layer(type, amp, cells, octaves, persistence, frequency, warpCells, warpAmount);
@@ -127,14 +127,14 @@ final class TextureDefinitionLoader {
 
     private static String req(Element e, String attr) {
         String v = e.getAttribute(attr);
-        if (v.isEmpty()) throw new IllegalArgumentException(e.getTagName() + "." + attr + " requis");
+        if (v.isEmpty()) throw new IllegalArgumentException(e.getTagName() + "." + attr + " is required");
         return v;
     }
 
     private static float num(Element e, String attr, float def) {
         if (!e.hasAttribute(attr)) return def;
         float v = Float.parseFloat(e.getAttribute(attr).trim());
-        if (!Float.isFinite(v)) throw new IllegalArgumentException(e.getTagName() + "." + attr + " doit être fini");
+        if (!Float.isFinite(v)) throw new IllegalArgumentException(e.getTagName() + "." + attr + " must be finite");
         return v;
     }
 }
