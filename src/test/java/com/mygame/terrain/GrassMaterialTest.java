@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /** Verifies that the grass material definition and its expected parameters load. */
 final class GrassMaterialTest {
+    /** Verifies that the grass material accepts the parameters used by the terrain renderer. */
     @Test
     void grassMaterialDefinitionLoadsFromResources() {
         DesktopAssetManager assets = new DesktopAssetManager(true);

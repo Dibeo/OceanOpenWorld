@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /** Verifies that custom material definitions and shader files resolve from the JME assets tree. */
 final class JmeAssetPathsTest {
+    /** Confirms that custom material definitions and shader files resolve from the JME assets tree. */
     @Test
     void customMaterialsAndShadersResolve() {
         DesktopAssetManager assets = new DesktopAssetManager(true);

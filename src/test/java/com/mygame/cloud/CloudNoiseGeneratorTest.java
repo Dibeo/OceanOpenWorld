@@ -8,17 +8,20 @@ import static org.junit.jupiter.api.Assertions.*;
 class CloudNoiseGeneratorTest {
     private static final int SIZE = 256;
 
+    /** Verifies that generating the same seed twice produces identical texture data. */
     @Test
     void sameSeedProducesIdenticalTexture() {
         assertArrayEquals(CloudNoiseGenerator.generate(42L, SIZE), CloudNoiseGenerator.generate(42L, SIZE));
     }
 
+    /** Verifies that different seeds produce different texture data. */
     @Test
     void differentSeedsProduceDifferentTextures() {
         assertFalse(java.util.Arrays.equals(
                 CloudNoiseGenerator.generate(1L, SIZE), CloudNoiseGenerator.generate(2L, SIZE)));
     }
 
+    /** Verifies that every generated channel contains meaningful value variation. */
     @Test
     void everyChannelUsesAWideRange() {
         byte[] data = CloudNoiseGenerator.generate(7L, SIZE);
@@ -29,10 +32,11 @@ class CloudNoiseGeneratorTest {
                 min = Math.min(min, v);
                 max = Math.max(max, v);
             }
-            assertTrue(max - min > 80, "canal " + c + " trop plat : " + min + ".." + max);
+            assertTrue(max - min > 80, "Channel " + c + " has insufficient range: " + min + ".." + max);
         }
     }
 
+    /** Verifies that opposite texture edges meet without a visible noise discontinuity. */
     @Test
     void textureTilesWithoutSeam() {
         byte[] data = CloudNoiseGenerator.generate(123L, SIZE);
@@ -45,11 +49,12 @@ class CloudNoiseGeneratorTest {
                 innerY += Math.abs(value(data, i, SIZE / 2, c) - value(data, i, SIZE / 2 - 1, c));
             }
             // The edge behaves like any other pair of neighboring pixels.
-            assertTrue(seamX <= innerX * 3 + SIZE, "couture en X, canal " + c);
-            assertTrue(seamY <= innerY * 3 + SIZE, "couture en Y, canal " + c);
+            assertTrue(seamX <= innerX * 3 + SIZE, "Seam along X in channel " + c);
+            assertTrue(seamY <= innerY * 3 + SIZE, "Seam along Y in channel " + c);
         }
     }
 
+    /** Verifies that wind direction is deterministic, seed-dependent, and normalized to one turn. */
     @Test
     void windDirectionIsDeterministicAndSeedDependent() {
         assertEquals(CloudNoiseGenerator.windAngle(5L), CloudNoiseGenerator.windAngle(5L));
@@ -58,6 +63,7 @@ class CloudNoiseGeneratorTest {
         assertTrue(a >= 0 && a < Math.PI * 2);
     }
 
+    /** Verifies that unsupported texture dimensions are rejected. */
     @Test
     void invalidSizesAreRejected() {
         assertThrows(IllegalArgumentException.class, () -> CloudNoiseGenerator.generate(1L, 100));

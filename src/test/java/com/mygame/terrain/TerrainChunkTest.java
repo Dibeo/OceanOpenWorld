@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Tests terrain blend weights, adjacent chunk continuity, and deterministic grass generation. */
 final class TerrainChunkTest {
+    /** Verifies that surface blend weights transition smoothly and always sum to one. */
     @Test
     void smoothlyBlendsSurfaceWeightsAcrossTransitions() {
         float waterHeight = 12f;
@@ -33,6 +34,7 @@ final class TerrainChunkTest {
         }
     }
 
+    /** Verifies that generated blend maps contain four channels per terrain vertex. */
     @Test
     void generatedBlendMapsContainRgbaWeightsForEveryTerrainVertex() {
         int subdivisions = 32;
@@ -44,6 +46,7 @@ final class TerrainChunkTest {
         assertEquals((subdivisions + 1) * (subdivisions + 1) * 4, data.blendMap1.remaining());
     }
 
+    /** Verifies that neighboring chunks have identical blend weights along their shared edge. */
     @Test
     void adjacentChunksHaveMatchingBlendWeightsAtTheirSharedEdge() {
         int subdivisions = 32;
@@ -62,6 +65,7 @@ final class TerrainChunkTest {
         }
     }
 
+    /** Verifies that grass placement is deterministic and remains above the shoreline. */
     @Test
     void grassPlacementIsSeededAndOnlyUsesGrassTerrain() {
         TerrainGenerator generator = new TerrainGenerator(42L);
@@ -100,6 +104,7 @@ final class TerrainChunkTest {
         }
     }
 
+    /** Verifies that grass geometry is omitted when terrain is entirely below the waterline. */
     @Test
     void grassIsOmittedWhenTheChunkHasNoGrassSurface() {
         TerrainChunk.Data data = TerrainChunk.generate(

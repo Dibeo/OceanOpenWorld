@@ -13,7 +13,9 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/** Verifies asynchronous terrain chunk loading and unloading without starting a render window. */
 final class ChunkLoaderTest {
+    /** Verifies that nearby terrain loads and is detached after the camera leaves its range. */
     @Test
     void loadsChunksInRangeAndUnloadsThemAfterCameraMoves() throws Exception {
         DesktopAssetManager assets = new DesktopAssetManager(true);

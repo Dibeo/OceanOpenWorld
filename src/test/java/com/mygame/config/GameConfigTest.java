@@ -15,6 +15,7 @@ final class GameConfigTest {
     @TempDir
     Path tempDir;
 
+    /** Verifies that the loader exposes the configured wind settings. */
     @Test
     void loadsWindSettings() throws IOException {
         GameConfig config = loadConfig(0.6f);
@@ -23,11 +24,41 @@ final class GameConfigTest {
         assertEquals(0.6f, config.windStrengthVariation);
     }
 
+    /** Verifies that wind-strength variation cannot exceed its documented maximum. */
     @Test
     void rejectsWindStrengthVariationAboveOne() throws IOException {
         Path configFile = writeConfig(1.01f);
 
         assertThrows(IllegalStateException.class, () -> GameConfig.load(configFile.toString()));
+    }
+
+    /** Verifies that invalid chunk geometry is rejected before use. */
+    @Test
+    void rejectsChunkSizeNotDivisibleBySubdivisions() throws IOException {
+        Path configFile = writeConfig(0.6f);
+        String xml = Files.readString(configFile).replace("subdivisions=\"32\"", "subdivisions=\"30\"");
+        Files.writeString(configFile, xml);
+
+        assertThrows(IllegalStateException.class, () -> GameConfig.load(configFile.toString()));
+    }
+
+    /** Verifies that a missing configuration file produces an explicit loading failure. */
+    @Test
+    void rejectsMissingConfigurationFile() {
+        assertThrows(IllegalStateException.class,
+                () -> GameConfig.load(tempDir.resolve("missing.xml").toString()));
+    }
+
+    /** Verifies that loading a valid file preserves representative world and graphics settings. */
+    @Test
+    void loadsRepresentativeRuntimeSettings() throws IOException {
+        GameConfig config = GameConfig.load(writeConfig(0.6f).toString());
+
+        assertEquals(42L, config.seed);
+        assertEquals(64, config.chunkSize);
+        assertEquals(32, config.subdivisions);
+        assertEquals(640, config.width);
+        assertEquals(1f, config.waterHeight);
     }
 
     private GameConfig loadConfig(float variation) throws IOException {
@@ -40,8 +71,8 @@ final class GameConfigTest {
                   <world seed="42"/>
                   <terrain chunkSize="64" subdivisions="32" renderDistance="8" maxChunksPerFrame="1"/>
                   <camera speed="1" farPlane="2"/>
-                  <graphics width="1" height="1" fpsLimit="1" vsync="false" gammaCorrection="false"/>
-                  <water height="0" transparency="0" waveSpeed="0" waveScale="0" maxAmplitude="1"
+                  <graphics width="640" height="480" fpsLimit="60" vsync="false" gammaCorrection="false"/>
+                  <water height="1" transparency="0" waveSpeed="0" waveScale="0" maxAmplitude="1"
                          windChangeSpeed="0.015" windStrengthVariation="%s" reflectionMapSize="1"/>
                   <lighting sunIntensity="1"/>
                   <grass density="1" distance="10" flowers="0"/>

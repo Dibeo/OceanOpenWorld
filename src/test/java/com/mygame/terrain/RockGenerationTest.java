@@ -32,6 +32,7 @@ class RockGenerationTest {
         return true;
     }
 
+    /** Verifies that a seed and chunk always generate identical rock mesh attributes. */
     @Test
     void sameSeedAndChunkGiveIdenticalRocks() {
         int[] c = findRockyChunk(1L);
@@ -42,6 +43,7 @@ class RockGenerationTest {
         assertEquals(a.indexCount, b.indexCount);
     }
 
+    /** Verifies that changing the world seed changes the generated rock mesh. */
     @Test
     void differentSeedsGiveDifferentRocks() {
         int[] c = findRockyChunk(1L);
@@ -49,12 +51,14 @@ class RockGenerationTest {
         assertTrue(b == null || !same(a.positions, b.positions));
     }
 
+    /** Verifies that zero rock density disables rock generation. */
     @Test
     void zeroDensityDisablesRocks() {
         int[] c = findRockyChunk(1L);
         assertTrue(rocks(1L, c[0], c[1], 0f) == null);
     }
 
+    /** Verifies that generated positions, normals, colors, indices, and bounds are valid. */
     @Test
     void geometryIsValid() {
         int[] c = findRockyChunk(3L);
@@ -72,6 +76,7 @@ class RockGenerationTest {
         assertTrue(r.minX > -6f && r.maxX < SIZE + 6f && r.minZ > -6f && r.maxZ < SIZE + 6f);
     }
 
+    /** Verifies that an individual rock's shape depends on its seed rather than call order. */
     @Test
     void rockShapeDependsOnlyOnItsSeed() {
         com.mygame.noise.PerlinNoise noise = new TerrainGenerator(5L).getRockShapeNoise();
@@ -84,6 +89,7 @@ class RockGenerationTest {
         assertFalse(same(a.build().positions, c.build().positions));
     }
 
+    /** Verifies that the generated rock texture is deterministic and seed-dependent. */
     @Test
     void rockTextureIsDeterministic() {
         byte[] a = bytes(RockTexture.create(9L)), b = bytes(RockTexture.create(9L)), c = bytes(RockTexture.create(10L));

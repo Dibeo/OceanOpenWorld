@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Tests deterministic wind evolution, normalized direction, amplitude bounds, and validation. */
 final class WindModelTest {
+    /** Verifies that equal seeds and elapsed times produce equal wind states. */
     @Test
     void sameSeedAndElapsedTimeProduceSameWind() {
         WindModel first = new WindModel(1234L, 0.1f, 0.6f, 2f);
@@ -22,6 +23,7 @@ final class WindModelTest {
         }
     }
 
+    /** Verifies that direction and wave amplitude evolve as time advances. */
     @Test
     void windDirectionAndWaveStrengthVaryOverTime() {
         WindModel model = new WindModel(1234L, 0.1f, 0.6f, 2f);
@@ -40,6 +42,7 @@ final class WindModelTest {
         assertTrue(amplitudeChanged, "Wind should modulate wave amplitude over time");
     }
 
+    /** Verifies that direction remains normalized and amplitude remains within its configured range. */
     @Test
     void windDirectionIsNormalizedAndAmplitudeStaysWithinConfiguredRange() {
         float baseline = 2f;
@@ -54,6 +57,7 @@ final class WindModelTest {
         }
     }
 
+    /** Verifies that normalized wind strength remains in the inclusive unit interval. */
     @Test
     void normalizedWindStrengthRemainsWithinZeroAndOne() {
         WindModel model = new WindModel(5678L, 0.05f, 0.4f, 2f);
@@ -65,6 +69,7 @@ final class WindModelTest {
         }
     }
 
+    /** Verifies that invalid settings and negative or non-finite time steps are rejected. */
     @Test
     void rejectsInvalidWindSettingsAndTimeSteps() {
         assertThrows(IllegalArgumentException.class,
@@ -73,5 +78,18 @@ final class WindModelTest {
                 () -> new WindModel(1L, 0.1f, 1.1f, 1f));
         assertThrows(IllegalArgumentException.class,
                 () -> new WindModel(1L, 0.1f, 0.5f, 1f).update(-1f));
+        assertThrows(IllegalArgumentException.class,
+                () -> new WindModel(1L, 0.1f, 0.5f, 1f).update(Float.NaN));
+    }
+
+    /** Verifies that a zero baseline amplitude remains zero regardless of wind strength. */
+    @Test
+    void zeroBaselineAmplitudeRemainsZero() {
+        WindModel model = new WindModel(99L, 0.1f, 1f, 0f);
+
+        for (int i = 0; i < 10; i++) {
+            model.update(1f);
+            assertEquals(0f, model.getWaveAmplitude());
+        }
     }
 }
