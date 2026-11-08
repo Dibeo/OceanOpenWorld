@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+/** Tests XML loading and validation of runtime configuration values. */
 final class GameConfigTest {
     @TempDir
     Path tempDir;

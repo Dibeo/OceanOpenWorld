@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Tests deterministic wind evolution, normalized direction, amplitude bounds, and validation. */
 final class WindModelTest {
     @Test
     void sameSeedAndElapsedTimeProduceSameWind() {

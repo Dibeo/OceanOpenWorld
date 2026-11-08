@@ -13,13 +13,21 @@ import java.util.ArrayList;
 import java.util.Random;
 
 /**
- * Génère des textures sans couture à partir d'une {@link TextureDefinition} et de la seed du monde.
- * Les mipmaps sont fournies directement (aucun appel à l'API interne d'Image).
- * Déterministe : même définition + même seed = même texture. Utilisable hors thread de rendu.
+ * Generates diffuse and normal textures from {@link TextureDefinition} layers.
+ * Output pixels are deterministic for the same definition and world seed. Perlin and ripple
+ * layers are periodic; per-pixel grain is not explicitly wrapped at the texture edges.
  */
 public final class ProceduralTextureGenerator {
     private ProceduralTextureGenerator() {}
 
+    /**
+     * Generates the diffuse RGB texture described by the definition.
+     *
+     * @param def texture definition with a diffuse map
+     * @param worldSeed world seed used to derive this texture's deterministic layers
+     * @return generated linear-space RGB8 texture with mipmaps
+     * @throws IllegalStateException if the definition has no diffuse map
+     */
     public static Texture2D diffuse(TextureDefinition def, long worldSeed) {
         MapSpec spec = require(def.diffuse, def, "diffuse");
         int size = def.size;
@@ -35,6 +43,14 @@ public final class ProceduralTextureGenerator {
         return new Texture2D(buildImage(base, size, false));
     }
 
+    /**
+     * Generates a tangent-space normal map from the definition's height layers.
+     *
+     * @param def texture definition with a normal map
+     * @param worldSeed world seed used to derive this texture's deterministic layers
+     * @return generated linear-space RGB8 normal texture with mipmaps
+     * @throws IllegalStateException if the definition has no normal map
+     */
     public static Texture2D normal(TextureDefinition def, long worldSeed) {
         MapSpec spec = require(def.normal, def, "normal");
         int size = def.size;
@@ -43,7 +59,7 @@ public final class ProceduralTextureGenerator {
         int k = 0;
         for (int j = 0; j < size; j++) {
             for (int i = 0; i < size; i++) {
-                // différences centrées avec bouclage : la normal map reste sans couture
+                // Central differences with wrapping keep the normal map seamless.
                 float hx = h[j * size + (i + 1) % size] - h[j * size + (i + size - 1) % size];
                 float hy = h[((j + 1) % size) * size + i] - h[((j + size - 1) % size) * size + i];
                 float nx = -hx * spec.strength, ny = -hy * spec.strength, nz = 1f;
@@ -61,7 +77,7 @@ public final class ProceduralTextureGenerator {
         return spec;
     }
 
-    /** Seed propre à chaque texture et à chaque carte, dérivée de la seed du monde. */
+    /** Derives a per-texture, per-map seed from the world seed. */
     private static long textureSeed(long worldSeed, String name, char map) {
         return worldSeed ^ (name.hashCode() * 0x9E3779B97F4A7C15L) ^ (map * 0xC2B2AE3D27D4EB4FL);
     }
@@ -88,7 +104,7 @@ public final class ProceduralTextureGenerator {
             for (int i = 0; i < size; i++) {
                 double u = (double) i / size, total = 0, amp = 1;
                 for (int o = 0; o < l.octaves; o++) {
-                    int c = l.cells << o; // période = nombre de cellules : bouclage exact
+                    int c = l.cells << o; // period equals the cell count, giving exact wrapping
                     total += noise.noise(u * c, v * c, c, c) * amp;
                     amp *= l.persistence;
                 }
@@ -117,8 +133,8 @@ public final class ProceduralTextureGenerator {
     private static byte encode(float n) { return (byte) ((n * 0.5f + 0.5f) * 255f); }
 
     /**
-     * Image RGB8 avec toute la chaîne de mipmaps (filtre boîte 2x2).
-     * Linear : une carte diffuse ici est un multiplicateur, sans conversion sRGB.
+     * Builds an RGB8 image with a full mip chain using a 2-by-2 box filter.
+     * Linear color space is used because diffuse maps here act as multipliers, without sRGB conversion.
      */
     private static Image buildImage(byte[] base, int size, boolean normalMap) {
         ArrayList<byte[]> levels = new ArrayList<>();
@@ -157,7 +173,7 @@ public final class ProceduralTextureGenerator {
                     }
                 }
                 int d = (y * nw + x) * 3;
-                if (normalMap) { // moyenne des vecteurs décodés, puis renormalisation
+                if (normalMap) { // average decoded vectors, then renormalize
                     float nx = acc[0] / 4f * 2f - 1f, ny = acc[1] / 4f * 2f - 1f, nz = acc[2] / 4f * 2f - 1f;
                     float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
                     if (len < 1e-5f) { nx = 0; ny = 0; nz = 1; len = 1; }

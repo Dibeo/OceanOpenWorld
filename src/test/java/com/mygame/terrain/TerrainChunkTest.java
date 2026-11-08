@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Tests terrain blend weights, adjacent chunk continuity, and deterministic grass generation. */
 final class TerrainChunkTest {
     @Test
     void smoothlyBlendsSurfaceWeightsAcrossTransitions() {

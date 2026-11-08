@@ -10,17 +10,31 @@ import com.mygame.camera.CameraManager;
 import com.mygame.config.GameConfig;
 import com.mygame.scene.WorldScene;
 
+/**
+ * Application entry point for the desktop OpenWorld demo.
+ *
+ * <p>Loads {@code config.xml}, configures the jMonkeyEngine window, and creates the world scene.
+ */
 public class Main extends SimpleApplication {
 
     private final GameConfig config;
-    private CameraManager cameraManager;
     private WorldScene worldScene;
 
+    /**
+     * Creates the application with the already validated runtime settings.
+     *
+     * @param config validated runtime configuration
+     */
     public Main(GameConfig config) {
         super();
         this.config = config;
     }
 
+    /**
+     * Loads the root-level configuration and starts the desktop application.
+     *
+     * @param args command-line arguments; currently unused
+     */
     public static void main(String[] args) {
         GameConfig config = GameConfig.load("config.xml");
         Main app = new Main(config);
@@ -38,14 +52,15 @@ public class Main extends SimpleApplication {
         app.start();
     }
 
+    /** Initializes camera controls and attaches the configured world scene. */
     @Override
     public void simpleInitApp() {
-        // Le monde n'utilise que 2 lumières : un seul passage de shader suffit
-        // (au lieu d'un passage par lumière en mode MultiPass).
+        // The world uses only two lights, so one shader pass is enough
+        // instead of one pass per light in MultiPass mode.
         renderManager.setPreferredLightMode(TechniqueDef.LightMode.SinglePass);
         renderManager.setSinglePassLightBatchSize(2);
 
-        cameraManager = new CameraManager(cam, flyCam);
+        CameraManager cameraManager = new CameraManager(cam, flyCam);
         cameraManager.initialize(config.cameraSpeed, config.cameraFar);
         cameraManager.setPosition(new Vector3f(0f, 45f, 75f));
         cameraManager.lookAt(Vector3f.ZERO);
@@ -55,16 +70,22 @@ public class Main extends SimpleApplication {
         worldScene = new WorldScene(assetManager, cam, viewPort, config);
         rootNode.attachChild(worldScene);
         worldScene.initialize();
-        // Plus de simpleUpdate() : WorldScene se met à jour via un Control
-        // appelé automatiquement par le scene graph.
+        // WorldScene updates through a Control invoked automatically by the scene graph,
+        // so no simpleUpdate() override is needed.
     }
 
+    /** Releases world resources before delegating shutdown to the engine. */
     @Override
     public void destroy() {
         if (worldScene != null) worldScene.cleanup();
         super.destroy();
     }
 
+    /**
+     * Returns the scene assembled during application initialization, or {@code null} beforehand.
+     *
+     * @return application world scene, or {@code null} before initialization
+     */
     public WorldScene getWorldScene() {
         return worldScene;
     }

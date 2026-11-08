@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Tests world-scale terrain noise configuration. */
 final class TerrainGeneratorTest {
     @Test
     void islandNoiseUsesBroaderScaleThanOriginalGeneration() {

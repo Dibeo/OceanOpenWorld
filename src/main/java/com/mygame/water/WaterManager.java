@@ -10,6 +10,9 @@ import com.jme3.scene.Node;
 import com.jme3.water.WaterFilter;
 import com.mygame.config.GameConfig;
 
+/**
+ * Configures and updates the jMonkeyEngine water filter and its post-processing pipeline.
+ */
 public class WaterManager {
     private final Node reflectionScene;
     private final AssetManager assets;
@@ -20,6 +23,16 @@ public class WaterManager {
     private WaterFilter water;
     private FilterPostProcessor fpp;
 
+    /**
+     * Creates a water manager using the scene, viewport, lighting direction, and settings supplied.
+     *
+     * @param reflectionScene scene rendered into the water reflection
+     * @param assets engine asset manager
+     * @param viewPort viewport that receives the water post-processing filter
+     * @param sunDirection initial direction of the sun rays
+     * @param config validated runtime settings
+     * @param wind shared deterministic wind model
+     */
     public WaterManager(Node reflectionScene, AssetManager assets,
                         ViewPort viewPort, Vector3f sunDirection, GameConfig config,
                         WindModel wind) {
@@ -31,7 +44,11 @@ public class WaterManager {
         this.wind = wind;
     }
 
-    /** @param preFilters filtres appliqués avant l'eau (ex. ombres), dans l'ordre. */
+    /**
+     * Adds the water filter after the supplied filters, which retain their input order.
+     *
+     * @param preFilters filters to apply before water
+     */
     public void initialize(Filter... preFilters) {
         if (water != null) return;
 
@@ -63,6 +80,11 @@ public class WaterManager {
         viewPort.addProcessor(fpp);
     }
 
+    /**
+     * Copies the current wind direction and wave amplitude into the water filter.
+     *
+     * @param tpf elapsed frame time in seconds
+     */
     public void update(float tpf) {
         if (water == null) return;
         applyWind();
@@ -73,9 +95,21 @@ public class WaterManager {
         water.setMaxAmplitude(wind.getWaveAmplitude());
     }
 
+    /**
+     * Returns the configured water filter, or {@code null} before initialization or after cleanup.
+     *
+     * @return water filter, or {@code null}
+     */
     public WaterFilter getWaterFilter() { return water; }
+
+    /**
+     * Returns the installed post-processor, or {@code null} before initialization or after cleanup.
+     *
+     * @return filter post-processor, or {@code null}
+     */
     public FilterPostProcessor getFilterPostProcessor() { return fpp; }
 
+    /** Removes and cleans up the post-processor; safe to call when not initialized. */
     public void cleanup() {
         if (fpp != null) {
             viewPort.removeProcessor(fpp);

@@ -1,9 +1,11 @@
 #import "Common/ShaderLib/GLSLCompat.glsllib"
 
+// Shades grass using the terrain normal, two aligned atlas textures, per-clump tint, and the
+// shared sun. Material uniforms are declared in MatDefs/Grass/Grass.j3md.
 uniform sampler2D m_ColorMap;
 uniform sampler2D m_FlowerMap;
 uniform vec3 g_CameraPosition;
-uniform vec3 m_SunDirection;   // direction des rayons (comme LightingManager) : le soleil est à l'opposé
+uniform vec3 m_SunDirection;   // light-ray direction from LightingManager; the sun is opposite
 uniform vec4 m_SunColor;
 uniform vec4 m_AmbientColor;
 
@@ -17,11 +19,11 @@ varying vec3 vWorldPos;
 
 const float TEXTURE_SIZE = 256.0;   // atlas 2x2 de motifs de 128 px
 
-// Dégradé du brin (espace linéaire) : base sombre et saturée, pointe plus claire et jaune.
+// Linear-space blade gradient: dark, saturated base to a lighter yellow tip.
 const vec3 BASE_COLOR = vec3(0.022, 0.068, 0.010);
 const vec3 TIP_COLOR  = vec3(0.165, 0.340, 0.048);
 
-// Palette des fleurs (albédo linéaire) : blanc, jaune, rose, violet, rouge, bleu.
+// Flower palette in linear albedo: white, yellow, pink, purple, red, and blue.
 const vec3 FLOWER_PALETTE[6] = vec3[6](
     vec3(0.62, 0.60, 0.54),
     vec3(0.78, 0.50, 0.02),
@@ -33,19 +35,19 @@ const vec3 FLOWER_CENTER = vec3(0.60, 0.33, 0.01);
 
 void main() {
     vec4 texel = texture(m_ColorMap, vUV);
-    // Tête de fleur : seulement sur les touffes fleuries (vFlower.y = 1).
+    // Apply the flower head only to clumps marked as flowering (vFlower.y = 1).
     vec2 head = texture(m_FlowerMap, vUV).rg * step(0.5, vFlower.y);
     texel.a = max(texel.a, head.x);
 
-    // L'alpha des mipmaps s'amincit : on le compense pour que l'herbe lointaine ne disparaisse pas.
+    // Mipmap alpha becomes thinner; compensate so distant grass does not disappear.
     vec2 dx = dFdx(vUV * TEXTURE_SIZE), dy = dFdy(vUV * TEXTURE_SIZE);
     float mip = max(0.0, 0.5 * log2(max(max(dot(dx, dx), dot(dy, dy)), 1.0)));
     float alpha = texel.a * (1.0 + 0.45 * mip);
     if (alpha < 0.5) discard;
 
     vec3 N = normalize(vNormal);
-    vec3 L = normalize(-m_SunDirection);                    // vers le soleil
-    vec3 V = normalize(g_CameraPosition - vWorldPos);       // vers la caméra
+    vec3 L = normalize(-m_SunDirection);                    // toward the sun
+    vec3 V = normalize(g_CameraPosition - vWorldPos);       // toward the camera
     float t = clamp(vT, 0.0, 1.0);
 
     vec3 albedo = mix(BASE_COLOR, TIP_COLOR, pow(t, 0.8)) * texel.rgb * vTint;
@@ -57,19 +59,18 @@ void main() {
         vec3 flowerColor = mix(FLOWER_PALETTE[paletteIndex] * brightness, FLOWER_CENTER, smoothstep(0.35, 0.65, head.y));
         albedo = mix(albedo, flowerColor, petal);
     }
-    // Quand le vent incline les brins vers ou contre la lumière, le champ « respire » :
-    // ondes claires et sombres qui le traversent.
+    // Wind-leaning blades create a breathing effect as bands of light and shadow move across the field.
     albedo *= 1.0 + 0.40 * clamp(vWave, -0.25, 0.6) * (1.0 - isFlower);
 
-    // Occlusion : le pied des touffes reçoit peu de lumière.
+    // Occlusion: the base of each clump receives little light.
     float occlusion = mix(0.22, 1.0, smoothstep(0.0, 0.65, t));
-    occlusion = mix(occlusion, 1.0, isFlower);   // une fleur au bout de sa tige est toujours éclairée
-    // Diffus « enveloppant » (un brin n'est pas un plan opaque) sur la normale du terrain.
+    occlusion = mix(occlusion, 1.0, isFlower);   // flower heads at the end of stalks stay lit
+    // Wrapped diffuse lighting uses the terrain normal because a blade is not an opaque plane.
     float diffuse = max(0.0, (dot(N, L) + 0.35) / 1.35);
-    // Translucidité : face au soleil, la lumière traverse les brins (surtout vers la pointe).
+    // Translucency lets light pass through blades facing the sun, especially near their tips.
     float transmission = pow(clamp(dot(-V, L), 0.0, 1.0), 3.0) * t;
     vec3 translucency = mix(vec3(0.95, 1.0, 0.30), vec3(1.0), isFlower) * transmission * mix(0.65, 1.1, isFlower);
-    // Léger lustre.
+    // Add a subtle sheen.
     float sheen = pow(max(dot(N, normalize(L + V)), 0.0), 24.0) * 0.06 * t;
 
     vec3 light = m_AmbientColor.rgb * occlusion

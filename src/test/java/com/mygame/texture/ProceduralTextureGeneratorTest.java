@@ -13,6 +13,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+/** Tests deterministic procedural diffuse-texture generation from a seed and definition. */
 final class ProceduralTextureGeneratorTest {
     @Test
     void sameSeedProducesIdenticalTexturePixels() {

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/** Regression tests for deterministic, seamless cloud-noise generation and wind derivation. */
 class CloudNoiseGeneratorTest {
     private static final int SIZE = 256;
 
@@ -43,7 +44,7 @@ class CloudNoiseGeneratorTest {
                 seamY += Math.abs(value(data, i, 0, c) - value(data, i, SIZE - 1, c));
                 innerY += Math.abs(value(data, i, SIZE / 2, c) - value(data, i, SIZE / 2 - 1, c));
             }
-            // Le bord se comporte comme n'importe quelle paire de pixels voisins.
+            // The edge behaves like any other pair of neighboring pixels.
             assertTrue(seamX <= innerX * 3 + SIZE, "couture en X, canal " + c);
             assertTrue(seamY <= innerY * 3 + SIZE, "couture en Y, canal " + c);
         }

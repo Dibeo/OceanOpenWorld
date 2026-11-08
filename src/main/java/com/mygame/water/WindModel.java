@@ -17,6 +17,15 @@ public final class WindModel {
     private float waveAmplitude;
     private float strength;
 
+    /**
+     * Creates deterministic wind variation and initializes its current values at time zero.
+     *
+     * @param seed seed for the noise sequence
+     * @param changeSpeed positive rate at which the noise is sampled
+     * @param strengthVariation relative amplitude variation in {@code [0, 1]}
+     * @param baseAmplitude baseline wave amplitude in world units; nonnegative
+     * @throws IllegalArgumentException if a setting is non-finite or outside its allowed range
+     */
     public WindModel(long seed, float changeSpeed, float strengthVariation, float baseAmplitude) {
         if (!Float.isFinite(changeSpeed) || changeSpeed <= 0f) {
             throw new IllegalArgumentException("Wind change speed must be finite and positive");
@@ -35,6 +44,12 @@ public final class WindModel {
         update(0f);
     }
 
+    /**
+     * Advances the deterministic wind state.
+     *
+     * @param tpf elapsed time in seconds; must be finite and nonnegative
+     * @throws IllegalArgumentException if {@code tpf} is negative or non-finite
+     */
     public void update(float tpf) {
         if (!Float.isFinite(tpf) || tpf < 0f) {
             throw new IllegalArgumentException("Time per frame must be finite and nonnegative");
@@ -50,15 +65,29 @@ public final class WindModel {
         waveAmplitude = baseAmplitude * (1f + strengthVariation * (float) force);
     }
 
+    /**
+     * Returns a copy of the current normalized wind direction in the XZ plane.
+     *
+     * @return unit-length direction vector
+     */
     public Vector2f getDirection() {
         return direction.clone();
     }
 
+    /**
+     * Returns the current wave amplitude in world units.
+     *
+     * @return wave amplitude
+     */
     public float getWaveAmplitude() {
         return waveAmplitude;
     }
 
-    /** Normalized wind force (0..1), shared by visual effects such as foliage. */
+    /**
+     * Returns the normalized wind force, shared by visual effects such as foliage.
+     *
+     * @return normalized wind strength in [0, 1]
+     */
     public float getStrength() {
         return strength;
     }

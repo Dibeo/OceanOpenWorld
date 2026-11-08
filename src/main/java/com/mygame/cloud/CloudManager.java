@@ -27,25 +27,22 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Couche de nuages volumétriques. La forme des nuages ne dépend que de {@code world.seed} :
- * la texture de bruit est produite sur CPU par {@link CloudNoiseGenerator}, le shader ne
- * tire aucun aléa. La direction du vent est elle aussi dérivée de la seed ; le décalage de
- * départ est nul, donc deux lancements identiques démarrent sur le même ciel.
+ * Renders a deterministic volumetric cloud layer and updates its motion and lighting.
+ * Cloud noise and wind direction derive from {@code world.seed}; the cloud texture is
+ * generated on the CPU, and each world starts with a zero wind offset.
  *
- * <p>Les nuages sont dessinés dans le bucket {@code Sky} (profondeur 1, après l'opaque) juste
- * après le dôme et le soleil : le terrain les masque, ils passent devant le soleil et la
- * caméra de reflet de l'eau les voit sans configuration supplémentaire. L'ordre de rendu
- * dans ce bucket est l'ordre d'insertion dans le graphe de scène, d'où l'attache après
- * {@link SkyManager}.
+ * <p>The dome is drawn in the {@code Sky} bucket after opaque geometry. It is attached
+ * after {@link SkyManager}, so the terrain occludes clouds, clouds can appear in front
+ * of the sun, and water-reflection cameras see the same cloud layer.
  */
 public final class CloudManager {
     private static final Logger LOG = Logger.getLogger(CloudManager.class.getName());
 
-    // Paramètres d'apparence qui n'ont pas besoin d'être exposés dans config.xml.
+    // Appearance parameters that do not need to be exposed in config.xml.
     private static final float EROSION = 0.6f;
     private static final float SUN_GAIN = 1.4f;
-    private static final float DISTANCE_FACTOR = 16f;       // portée = 16 × (altitude + épaisseur)
-    private static final float SHEAR_FACTOR = 0.35f;        // inclinaison sous le vent, × épaisseur
+    private static final float DISTANCE_FACTOR = 16f;       // range = 16 × (altitude + thickness)
+    private static final float SHEAR_FACTOR = 0.35f;        // downwind tilt × thickness
     private static final Vector3f AIR_EXTINCTION = new Vector3f(0.015f, 0.05f, 0.12f);
 
     private final Node scene;
@@ -65,6 +62,16 @@ public final class CloudManager {
     private int lastSunVersion = -1;
     private boolean initialized;
 
+    /**
+     * Creates the cloud manager with dependencies shared by the world scene.
+     *
+     * @param scene scene receiving the cloud dome
+     * @param assets engine asset manager
+     * @param camera active camera
+     * @param lighting shared sun state
+     * @param sky initialized sky manager
+     * @param config validated cloud settings
+     */
     public CloudManager(Node scene, AssetManager assets, Camera camera,
                         LightingManager lighting, SkyManager sky, GameConfig config) {
         this.scene = scene;
@@ -75,7 +82,11 @@ public final class CloudManager {
         this.config = config;
     }
 
-    /** À appeler après {@link SkyManager#initialize()} (ordre de rendu du bucket Sky). */
+    /**
+     * Creates the cloud dome and seed-derived noise texture when clouds are enabled.
+     *
+     * @param seed world seed
+     */
     public void initialize(long seed) {
         if (initialized || !config.cloudsEnabled) return;
 
@@ -107,20 +118,29 @@ public final class CloudManager {
 
         initialized = true;
         applySeed(seed);
-        // Première texture synchrone : le ciel est complet dès la première image.
+        // Generate the first texture synchronously so clouds are visible in the first frame.
         applyTexture(CloudNoiseGenerator.generate(seed, config.cloudTextureSize));
         update(0f);
     }
 
-    /** Nouveau monde : nouvelle texture (calculée hors du thread de rendu) et vent remis à zéro. */
+    /**
+     * Schedules a seed-derived cloud texture off the render thread and resets the wind offset.
+     *
+     * @param seed new world seed
+     */
     public void regenerate(long seed) {
         if (!initialized) return;
         applySeed(seed);
         int size = config.cloudTextureSize;
-        // Une régénération plus récente remplace simplement la précédente.
+        // A newer regeneration supersedes the previous pending result.
         pendingTexture = CompletableFuture.supplyAsync(() -> CloudNoiseGenerator.generate(seed, size));
     }
 
+    /**
+     * Advances cloud motion and applies completed background texture generation.
+     *
+     * @param tpf elapsed frame time in seconds
+     */
     public void update(float tpf) {
         if (!initialized) return;
         cloudNode.setLocalTranslation(camera.getLocation());
@@ -135,7 +155,7 @@ public final class CloudManager {
             }
         }
 
-        // Le décalage reste dans [0, tileMeters) : la texture est périodique, on garde la précision float.
+        // Keep the periodic texture offset in [0, tileMeters) to preserve float precision.
         float tile = config.cloudTileMeters;
         windX = wrap(windX + windDirection.x * config.cloudWindSpeed * tpf, tile);
         windY = wrap(windY + windDirection.y * config.cloudWindSpeed * tpf, tile);
@@ -149,12 +169,18 @@ public final class CloudManager {
         }
     }
 
+    /** Detaches the cloud node and abandons any pending texture result. */
     public void cleanup() {
         pendingTexture = null;
         cloudNode.removeFromParent();
         initialized = false;
     }
 
+    /**
+     * Returns the scene node containing the cloud dome.
+     *
+     * @return cloud scene node
+     */
     public Node getCloudNode() {
         return cloudNode;
     }
@@ -164,7 +190,7 @@ public final class CloudManager {
         windDirection.set((float) Math.cos(angle), (float) Math.sin(angle));
         windX = 0.0;
         windY = 0.0;
-        // Les nuages s'inclinent légèrement dans le sens du vent quand l'altitude augmente.
+        // Clouds shear slightly downwind as altitude increases.
         float shear = config.cloudThickness * SHEAR_FACTOR;
         material.setVector2("Shear", new Vector2f(windDirection.x * shear, windDirection.y * shear));
     }
@@ -176,19 +202,19 @@ public final class CloudManager {
         Texture2D texture = new Texture2D(new Image(Image.Format.RGBA8, size, size, buffer, ColorSpace.Linear));
         texture.setWrap(Texture.WrapMode.Repeat);
         texture.setMagFilter(Texture.MagFilter.Bilinear);
-        // Trilinear : jME génère les mipmaps tout seul (voir Texture.setMinFilter).
+        // Trilinear filtering makes jME generate mipmaps automatically (see Texture.setMinFilter).
         texture.setMinFilter(Texture.MinFilter.Trilinear);
         material.setTexture("NoiseMap", texture);
     }
 
-    /** @param rayDirection direction des rayons de lumière (vers le bas) : le soleil est à l'opposé. */
+    /** @param rayDirection direction of the light rays (downward); the sun lies in the opposite direction */
     private void applySun(Vector3f rayDirection) {
         Vector3f toSun = rayDirection.negate();
         material.setVector3("SunDirection", toSun);
 
         float up = Math.max(0f, toSun.y);
         float daylight = smoothstep(-0.08f, 0.18f, toSun.y);
-        // Masse d'air approchée : le soleil bas traverse plus d'atmosphère et rougit.
+        // Approximate air mass: a low sun passes through more atmosphere and appears redder.
         float airMass = 1f / (0.08f + 0.92f * up);
         Vector3f sunColor = new Vector3f(
                 (float) Math.exp(-airMass * AIR_EXTINCTION.x),
@@ -205,8 +231,8 @@ public final class CloudManager {
         return value - Math.floor(value / period) * period;
     }
 
-    private static float smoothstep(float edge0, float edge1, float x) {
-        float t = Math.max(0f, Math.min(1f, (x - edge0) / (edge1 - edge0)));
+    private static float smoothstep(float edge0, float edge1, float y) {
+        float t = Math.max(0f, Math.min(1f, (y - edge0) / (edge1 - edge0)));
         return t * t * (3f - 2f * t);
     }
 }

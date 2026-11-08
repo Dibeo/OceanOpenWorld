@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+/** Tests seed determinism, periodic sampling, and terrain repeatability for Perlin noise. */
 final class PerlinNoiseTest {
     @Test
     void sameSeedProducesSameNoiseAndTerrain() {

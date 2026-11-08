@@ -26,30 +26,21 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Charge les chunks proches et détache ceux qui sortent du rayon.
- * Le calcul lourd (bruit, normales, poids de textures) se fait sur des threads de fond ;
- * seul l'assemblage du Mesh et l'attachement au scene graph ont lieu sur le thread de rendu,
- * au maximum {@code maxChunksPerFrame} par frame.
+ * Streams terrain chunks around the camera, generating mesh data asynchronously and installing
+ * scene-graph objects on the render thread. At most {@code maxChunksPerFrame} chunks are assembled
+ * per frame.
  *
- * <p>L'herbe est bien plus coûteuse que le terrain : elle n'existe que pour les chunks situés dans
- * {@code grass.distance} de la caméra. Elle est calculée à la demande (hauteurs conservées dans le
- * chunk), libérée quand la caméra s'éloigne, et regénérée à l'identique (placement déterministe).
+ * <p>Grass is generated on demand only for chunks within {@code grass.distance}; sampled terrain
+ * heights are retained so grass can be released when the camera moves away and regenerated
+ * deterministically when it returns.
  */
 public final class ChunkLoader {
     private static final Logger LOG = Logger.getLogger(ChunkLoader.class.getName());
 
-    private static final class Result {
-        final long key; final int generation; final TerrainChunk.Data data;
-        Result(long key, int generation, TerrainChunk.Data data) {
-            this.key = key; this.generation = generation; this.data = data;
-        }
+    private record Result(long key, int generation, TerrainChunk.Data data) {
     }
 
-    private static final class GrassResult {
-        final long key; final int generation; final TerrainChunk.GrassData data;
-        GrassResult(long key, int generation, TerrainChunk.GrassData data) {
-            this.key = key; this.generation = generation; this.data = data;
-        }
+    private record GrassResult(long key, int generation, TerrainChunk.GrassData data) {
     }
 
     private final int renderDistance, maxNewChunksPerFrame, maxInFlight;
@@ -63,7 +54,7 @@ public final class ChunkLoader {
     private final VertexBuffer sharedIndices;
     private final ExecutorService executor;
 
-    // Tout ce qui suit n'est touché que par le thread de rendu.
+    // The following state is accessed only by the render thread.
     private final Map<Long, TerrainChunk> loaded = new HashMap<>();
     private final Set<Long> pending = new HashSet<>();
     private final Queue<Long> requestQueue = new ArrayDeque<>();
@@ -79,6 +70,17 @@ public final class ChunkLoader {
     private final ConcurrentLinkedQueue<GrassResult> grassReady = new ConcurrentLinkedQueue<>();
     private boolean grassDirty = true;
 
+    /**
+     * Creates the worker pool and loader for the supplied terrain scene and validated settings.
+     *
+     * @param terrainNode parent node for loaded chunk geometry
+     * @param camera camera used to choose nearby chunks
+     * @param material terrain material
+     * @param grassMaterial grass material
+     * @param rockMaterial rock material
+     * @param generator seeded terrain generator
+     * @param config runtime settings controlling streaming and geometry
+     */
     public ChunkLoader(Node terrainNode, Camera camera, Material material, Material grassMaterial,
                        Material rockMaterial, TerrainGenerator generator, GameConfig config) {
         this.terrainNode = terrainNode;
@@ -93,7 +95,7 @@ public final class ChunkLoader {
         this.sharedIndices = TerrainChunk.createIndexBuffer(config.subdivisions);
         int threads = Math.max(1, Runtime.getRuntime().availableProcessors() - 2);
         this.maxInFlight = Math.max(maxNewChunksPerFrame, threads * 2);
-        // Un chunk à l'indice d + 1 de la caméra est à au moins d × chunkSize mètres.
+        // A chunk d + 1 indices away from the camera is at least d × chunkSize meters away.
         this.grassRadius = Math.min(renderDistance, (int) Math.ceil(config.grassDistance / config.chunkSize));
         this.maxGrassInFlight = threads * 2;
         this.maxGrassBuildsPerFrame = Math.max(1, maxNewChunksPerFrame / 2);
@@ -117,7 +119,11 @@ public final class ChunkLoader {
         return Math.abs(x - cx) <= renderDistance && Math.abs(z - cz) <= renderDistance;
     }
 
-    /** À appeler à chaque frame sur le thread de rendu. */
+    /**
+     * Advances chunk streaming and attaches completed geometry.
+     *
+     * <p>Call once per frame on the render thread.
+     */
     public void update() {
         Vector3f location = camera.getLocation();
         int cx = coordToChunk(location.x), cz = coordToChunk(location.z);
@@ -125,7 +131,7 @@ public final class ChunkLoader {
         drainReady(cx, cz);
         drainGrassReady(cx, cz);
 
-        // Recalcul de la zone seulement quand la caméra change de chunk (même après téléportation).
+        // Recalculate the region only when the camera enters a different chunk, including after teleporting.
         if (dirty || cx != lastCx || cz != lastCz) {
             dirty = false;
             lastCx = cx;
@@ -147,11 +153,11 @@ public final class ChunkLoader {
         int built = 0;
         Result r;
         while (built < maxNewChunksPerFrame && (r = ready.poll()) != null) {
-            if (r.generation != generation) continue; // résultat d'une ancienne seed
+            if (r.generation != generation) continue; // result from an earlier seed
             pending.remove(r.key);
             if (r.data == null) continue;
             int x = unpackX(r.key), z = unpackZ(r.key);
-            if (!inRange(x, z, cx, cz)) continue;     // la caméra s'est éloignée entre-temps
+            if (inRange(x, z, cx, cz)) continue;     // the camera moved away before this result was ready
             TerrainChunk chunk = new TerrainChunk(x, z, r.data, material, rockMaterial, sharedIndices,
                     config.chunkSize);
             loaded.put(r.key, chunk);
@@ -166,7 +172,7 @@ public final class ChunkLoader {
         Iterator<Map.Entry<Long, TerrainChunk>> it = loaded.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<Long, TerrainChunk> e = it.next();
-            if (!inRange(unpackX(e.getKey()), unpackZ(e.getKey()), cx, cz)) {
+            if (inRange(unpackX(e.getKey()), unpackZ(e.getKey()), cx, cz)) {
                 e.getValue().getGeometry().removeFromParent();
                 if (e.getValue().getRockGeometry() != null) e.getValue().getRockGeometry().removeFromParent();
                 e.getValue().clearGrass();
@@ -194,7 +200,7 @@ public final class ChunkLoader {
         }
     }
 
-    /** Libère l'herbe des chunks qui s'éloignent (marge d'un chunk contre les allers-retours). */
+    /** Releases grass from distant chunks, keeping a one-chunk margin to avoid repeated rebuilds. */
     private void trimGrass(int cx, int cz) {
         for (Map.Entry<Long, TerrainChunk> e : loaded.entrySet()) {
             if (e.getValue().isGrassBuilt() && !inGrassRange(e.getKey(), cx, cz, 1)) {
@@ -283,8 +289,13 @@ public final class ChunkLoader {
         }
     }
 
+    /**
+     * Discards loaded and pending work, then starts streaming with a new terrain generator.
+     *
+     * @param newGenerator generator to use for future chunk data
+     */
     public void regenerate(TerrainGenerator newGenerator) {
-        generation++; // invalide tous les calculs en cours
+        generation++; // invalidate all in-progress work
         ready.clear();
         pending.clear();
         requestQueue.clear();
@@ -298,13 +309,24 @@ public final class ChunkLoader {
         update();
     }
 
-    /** Arrête les threads de fond. */
+    /** Stops background workers and clears completed results. */
     public void shutdown() {
         executor.shutdownNow();
         ready.clear();
         grassReady.clear();
     }
 
+    /**
+     * Returns the number of chunks currently attached to the terrain node.
+     *
+     * @return loaded chunk count
+     */
     public int getLoadedChunkCount() { return loaded.size(); }
+
+    /**
+     * Returns the number of terrain chunks awaiting background generation.
+     *
+     * @return pending chunk count
+     */
     public int getPendingChunkCount() { return pending.size(); }
 }

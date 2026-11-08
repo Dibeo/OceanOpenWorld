@@ -1,7 +1,10 @@
 MaterialDef Grass {
+    // Grass atlas and optional flower mask share UV layout. Fade distances are horizontal metres;
+    // WindDirection is an XZ-plane vector, WindStrength is normalized, and Time is elapsed seconds.
+    // Keep shader parameter names synchronized with TerrainManager and Shaders/Grass.
     MaterialParameters {
         Texture2D ColorMap
-        // Têtes de fleurs (R pétales, G cœur), même disposition que ColorMap
+        // Flower heads (R petals, G centers), aligned with ColorMap
         Texture2D FlowerMap
         Vector2 WindDirection
         Float WindStrength
@@ -9,7 +12,7 @@ MaterialDef Grass {
         Vector3 SunDirection
         Color SunColor
         Color AmbientColor
-        // Distances (mètres) entre lesquelles les touffes rétrécissent jusqu'à disparaître
+        // World-space distances in meters over which grass clumps shrink to zero
         Float FadeStart
         Float FadeEnd
     }

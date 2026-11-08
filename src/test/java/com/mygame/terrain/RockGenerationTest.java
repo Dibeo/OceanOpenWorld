@@ -6,6 +6,7 @@ import java.nio.FloatBuffer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/** Tests seeded rock placement, generated mesh data, and rock texture repeatability. */
 class RockGenerationTest {
     private static final int SIZE = 64, SUB = 32;
     private static final float WATER = 0f;
@@ -15,7 +16,7 @@ class RockGenerationTest {
         return TerrainChunk.generate(cx, cz, generator, SIZE, SUB, WATER, density, 1f).rocks;
     }
 
-    /** Premier chunk rocheux de la seed, cherché dans une petite zone. */
+    /** Finds the first chunk containing a rock within a small search area. */
     private static int[] findRockyChunk(long seed) {
         for (int cz = -10; cz <= 10; cz++) {
             for (int cx = -10; cx <= 10; cx++) {
@@ -67,7 +68,7 @@ class RockGenerationTest {
             assertTrue(ao >= 0f && ao <= 1.1f, "occlusion dans [0,1]");
         }
         assertTrue(r.indexCount % 3 == 0);
-        // Les rochers restent près de leur chunk (taille max ~2,2 m + cailloux).
+        // Rocks stay close to their chunk (maximum size is about 2.2 m, including pebbles).
         assertTrue(r.minX > -6f && r.maxX < SIZE + 6f && r.minZ > -6f && r.maxZ < SIZE + 6f);
     }
 

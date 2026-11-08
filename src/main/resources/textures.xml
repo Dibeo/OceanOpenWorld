@@ -1,20 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Définition des textures procédurales. Placer ce fichier dans src/main/resources/.
-  Les textures sont générées à partir de la seed du monde (world.seed de config.xml) :
-  même seed = mêmes textures. Toutes les textures sont sans couture (tileables).
+  Editable procedural surface-texture catalog. Loaded from the classpath as /textures.xml.
+  Values without stated units are dimensionless. The loader requires a <textures> root and
+  reads each direct child <texture>; texture names must be unique.
 
-  <texture name size tileMeters>
-    size       : côté en pixels, puissance de 2 (16..1024)
-    tileMeters : taille réelle (mètres) d'une répétition sur le terrain
-  <diffuse base contrast r g b>   multiplicateur de luminosité (la teinte vient des couleurs de sommets)
-      valeur = base + contrast * somme(layers), puis multiplié par (r,g,b)
-  <normal strength>               normal map déduite de la somme des layers
-  <layer type=...> types :
-      perlin : cells (cellules sur la texture, 1..256), octaves (1..8), persistence, amplitude
-               contrainte : cells * 2^(octaves-1) <= 256
-      ripple : frequency (rides entières sur la texture), warpCells, warpAmount, amplitude
-      grain  : amplitude (bruit blanc par pixel)
+  <texture name="..." size="..." tileMeters="...">:
+    name       Required lookup key used by terrain/material code.
+    size       Optional square image width/height in pixels; default 256. Must be a power of
+               two from 16 through 1024.
+    tileMeters Optional world-space width/height covered by one repetition; default 4; must
+               be greater than zero.
+    Provide at least one <diffuse> or <normal>; each supplied map needs one or more <layer>.
+    If a map is repeated, only its first occurrence is read.
+
+  <diffuse base="..." contrast="..." r="..." g="..." b="...">:
+    base       Default 0.9; constant component of the generated diffuse multiplier.
+    contrast   Default 1; multiplier applied to the sum of layer values.
+    r/g/b      Default 1 each; per-channel multipliers.
+    Generated channel = clamp((base + contrast * summedLayers) * channelMultiplier, 0, 1).
+  <normal strength="...">:
+    strength   Default 6; dimensionless scale for height differences when deriving normals.
+    The other map attributes (base, contrast and r/g/b) default as above but do not affect
+    normal-map generation.
+
+  <layer type="perlin|ripple|grain" ...>:
+    type       Required; case-insensitive PERLIN, RIPPLE, or GRAIN.
+    amplitude  Optional finite layer contribution; default 1. No range restriction is imposed.
+    PERLIN: cells (default 8, must be >= 1), octaves (default 1, range 1..8),
+            persistence (default 0.5), and amplitude. The loader requires
+            cells * 2^(octaves - 1) <= 256. Persistence and amplitude have no range check.
+    RIPPLE: frequency (default 4, must be >= 1), warpCells (default 4, range 1..256),
+            warpAmount (default 0), and amplitude. warpAmount has no range check.
+    GRAIN: amplitude controls the contribution of per-pixel random grain.
+    Non-finite recognized numeric attributes are rejected. Numeric attributes not relevant to a layer
+    type are parsed using their defaults and otherwise ignored by that layer.
+
+  The catalog is deterministic from the world seed and texture name. Perlin and ripple terms
+  are periodic; grain is generated independently per pixel and is not explicitly edge-wrapped,
+  so inspect seams after adding grain. Run the texture-definition tests after edits.
 -->
 <textures>
     <texture name="sand" size="256" tileMeters="4">
@@ -49,7 +72,7 @@
             <layer type="grain" amplitude="0.18"/>
         </normal>
     </texture>
-    <!-- Variantes de vert : mélangées au vert de base par du bruit (voir TerrainChunk / TerrainGenerator). -->
+    <!-- Green variants blended with the base grass color using noise (see TerrainChunk / TerrainGenerator). -->
     <texture name="grass_dry" size="256" tileMeters="4">
         <diffuse base="0.88" contrast="0.7" r="0.80" g="0.88" b="0.16">
             <layer type="perlin" cells="24" octaves="2" persistence="0.55" amplitude="0.07"/>

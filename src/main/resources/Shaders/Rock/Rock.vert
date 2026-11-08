@@ -1,6 +1,8 @@
 #import "Common/ShaderLib/GLSLCompat.glsllib"
 
-// inColor : rgb = teinte (roche, terre au pied, mousse), a = occlusion ambiante
+// inColor : rgb = tint (rock, base soil, moss), a = ambient occlusion
+// Passes world-space vertex data and vertex tint/occlusion to Rock.frag. TerrainChunk supplies
+// these position, normal, and color attributes.
 attribute vec3 inPosition;
 attribute vec3 inNormal;
 attribute vec4 inColor;

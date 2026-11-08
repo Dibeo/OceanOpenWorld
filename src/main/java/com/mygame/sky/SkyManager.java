@@ -17,7 +17,10 @@ import com.mygame.lighting.LightingManager;
 
 import java.nio.FloatBuffer;
 
-/** Apparence du ciel : ne possède pas de direction solaire indépendante. */
+/**
+ * Creates and updates the sky gradient and visible sun using the shared lighting direction.
+ * The manager does not maintain a separate sun direction.
+ */
 public final class SkyManager {
     private static final float MAX_SKY_RADIUS = 450f;
     private static final float SUN_RADIUS = 14f;
@@ -35,6 +38,14 @@ public final class SkyManager {
     private int lastSunVersion = -1;
     private boolean initialized;
 
+    /**
+     * Creates a sky manager attached to the supplied scene and camera.
+     *
+     * @param scene scene node receiving the sky dome
+     * @param assets engine asset manager
+     * @param camera active camera
+     * @param lighting shared sun state
+     */
     public SkyManager(Node scene, AssetManager assets, Camera camera, LightingManager lighting) {
         this.scene = scene;
         this.assets = assets;
@@ -42,15 +53,16 @@ public final class SkyManager {
         this.lighting = lighting;
     }
 
+    /** Builds and attaches the sky dome and visible sun. */
     public void initialize() {
         if (initialized) return;
 
-        // Le dôme ne doit pas dépasser le far plane, sinon il serait coupé par le frustum.
+        // Keep the dome inside the far plane so the camera frustum does not clip it.
         skyRadius = Math.min(MAX_SKY_RADIUS, camera.getFrustumFar() * 0.9f);
         sunDistance = skyRadius * 0.78f;
 
         Sphere sphere = new Sphere(32, 64, skyRadius);
-        // Unshaded + VertexColor n'a besoin ni de normales ni de coordonnées de texture.
+        // Unshaded with VertexColor needs neither normals nor texture coordinates.
         sphere.clearBuffer(VertexBuffer.Type.Normal);
         sphere.clearBuffer(VertexBuffer.Type.TexCoord);
         addGradient(sphere);
@@ -60,8 +72,8 @@ public final class SkyManager {
         skyMaterial.setBoolean("VertexColor", true);
         skyMaterial.getAdditionalRenderState().setFaceCullMode(RenderState.FaceCullMode.Off);
         skyMaterial.getAdditionalRenderState().setDepthWrite(false);
-        // Le bucket Sky est dessiné APRÈS l'opaque, avec une profondeur fixée à 1 :
-        // le test de profondeur doit rester actif, sinon le dôme recouvre le terrain.
+        // The Sky bucket is drawn after opaque geometry at depth 1. Keep depth testing
+        // enabled so the dome does not cover the terrain.
         skyMaterial.getAdditionalRenderState().setDepthTest(true);
         sky.setMaterial(skyMaterial);
         sky.setQueueBucket(RenderQueue.Bucket.Sky);
@@ -75,11 +87,11 @@ public final class SkyManager {
         Material sunMaterial = new Material(assets, "Common/MatDefs/Misc/Unshaded.j3md");
         sunMaterial.setColor("Color", new ColorRGBA(1f, 0.96f, 0.75f, 1f));
         sunMaterial.getAdditionalRenderState().setDepthWrite(false);
-        // Le soleil doit être masqué par un objet opaque situé devant lui.
+        // Opaque objects in front of the sun must occlude it.
         sunMaterial.getAdditionalRenderState().setDepthTest(true);
         sunGeometry.setMaterial(sunMaterial);
-        // Bucket Sky (profondeur 1, ordre d'insertion) : dessiné avant les nuages, qui peuvent
-        // ainsi passer devant le soleil ; le terrain, lui, le masque toujours.
+        // The Sky bucket is drawn at depth 1 in insertion order. Draw the sun before
+        // the clouds so they can appear in front of it; terrain still occludes both.
         sunGeometry.setQueueBucket(RenderQueue.Bucket.Sky);
         skyNode.attachChild(sunGeometry);
 
@@ -92,14 +104,13 @@ public final class SkyManager {
         FloatBuffer positions = mesh.getFloatBuffer(VertexBuffer.Type.Position);
         int count = mesh.getVertexCount();
         float[] colors = new float[count * 4];
-        ColorRGBA horizon = HORIZON;
         ColorRGBA zenith = new ColorRGBA(0.08f, 0.34f, 0.78f, 1f);
         ColorRGBA lower = new ColorRGBA(0.27f, 0.43f, 0.60f, 1f);
         ColorRGBA c = new ColorRGBA();
 
         for (int i = 0; i < count; i++) {
             float y = positions.get(i * 3 + 1) / skyRadius;
-            c.set(horizon);
+            c.set(HORIZON);
             if (y >= 0f) {
                 c.interpolateLocal(zenith, (float) Math.pow(y, 0.55));
             } else {
@@ -115,35 +126,53 @@ public final class SkyManager {
         mesh.updateBound();
     }
 
+    /**
+     * Tracks the camera and updates the visible sun when the shared sun direction changes.
+     *
+     * @param tpf elapsed frame time in seconds (not used by the static sky)
+     */
     public void update(float tpf) {
         if (!initialized) return;
         skyNode.setLocalTranslation(camera.getLocation());
 
         int version = lighting.getSunVersion();
         if (version != lastSunVersion) {
-            // Le vecteur de la lumière indique où vont les rayons ;
-            // le soleil visible se trouve dans la direction opposée.
-            Vector3f d = lighting.getSun().getDirection(); // référence interne, aucune allocation
+            // The light vector points along the rays; the visible sun lies in the opposite direction.
+            Vector3f d = lighting.getSun().getDirection(); // internal reference; no allocation
             sunGeometry.setLocalTranslation(-d.x * sunDistance, -d.y * sunDistance, -d.z * sunDistance);
             lastSunVersion = version;
         }
     }
 
+    /** Detaches the sky node and resets the initialized state. */
     public void cleanup() {
         skyNode.removeFromParent();
         initialized = false;
     }
 
+    /**
+     * Returns the node containing the sky dome and visible sun.
+     *
+     * @return sky scene node
+     */
     public Node getSkyNode() {
         return skyNode;
     }
 
-    /** Rayon du dôme (valide après {@link #initialize()}). */
+    /**
+     * Returns the computed dome radius in world units; meaningful after initialization.
+     *
+     * @return sky dome radius
+     */
     public float getSkyRadius() {
         return skyRadius;
     }
 
-    /** Couleur de l'horizon : référence commune pour la brume et l'ambiant des nuages. */
+    /**
+     * Returns a defensive copy of the shared horizon color.
+     *
+     * @return copy of the horizon color
+     */
     public static ColorRGBA horizonColor() {
         return HORIZON.clone();
     }

@@ -11,20 +11,22 @@ import java.nio.ByteBuffer;
 import java.util.stream.IntStream;
 
 /**
- * Texture de roche tileable, projetée en triplanaire par le shader (aucune UV sur les rochers).
- * Entièrement issue du Perlin périodique de la seed du monde :
- * <pre>
- *  R : grandes taches de ton        (fBm basse fréquence)
- *  G : grain fin                    (fBm haute fréquence)
- *  B : fissures et reliefs          (|Perlin| inversé : lignes sombres fines)
- * </pre>
- * Le shader s'en sert aussi comme carte de hauteur pour un relief sans tangentes.
+ * Creates a seamless, seed-dependent RGBA noise texture used by the triplanar rock shader.
+ * Red stores broad low-frequency tone variation, green stores fine high-frequency grain,
+ * and blue stores crack and relief information. The shader also uses the texture as a height
+ * map, deriving relief without tangents.
  */
 final class RockTexture {
     private static final int SIZE = 256;
 
     private RockTexture() { }
 
+    /**
+     * Generates the rock noise texture for a world seed.
+     *
+     * @param seed world seed
+     * @return repeating 256-by-256 linear-space RGBA texture
+     */
     static Texture2D create(long seed) {
         PerlinNoise low = new PerlinNoise(seed + 0x7A01L);
         PerlinNoise high = new PerlinNoise(seed + 0x7A02L);
@@ -37,7 +39,7 @@ final class RockTexture {
                 double a = fbm(low, u, v, 6, 4, 0.5);
                 double b = fbm(high, u, v, 32, 3, 0.55);
                 double c = 0;
-                // Fissures : 1 - |n| donne des crêtes fines là où le bruit s'annule.
+                // Inverted absolute noise creates fine crack ridges where the noise reaches zero.
                 double amplitude = 1, sum = 0;
                 for (int o = 0; o < 3; o++) {
                     int cells = 10 << o;
@@ -59,7 +61,7 @@ final class RockTexture {
         Texture2D texture = new Texture2D(new Image(Image.Format.RGBA8, SIZE, SIZE, pixels, ColorSpace.Linear));
         texture.setWrap(Texture.WrapMode.Repeat);
         texture.setMagFilter(Texture.MagFilter.Bilinear);
-        texture.setMinFilter(Texture.MinFilter.Trilinear);   // jME génère les mipmaps
+        texture.setMinFilter(Texture.MinFilter.Trilinear);   // jME generates mipmaps
         texture.setAnisotropicFilter(4);
         return texture;
     }

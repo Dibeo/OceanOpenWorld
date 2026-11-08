@@ -1,6 +1,5 @@
 package com.mygame.config;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,24 +8,86 @@ import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import org.xml.sax.SAXException;
 
-/** Paramètres immuables chargés à partir d'un fichier XML externe. */
+/**
+ * Immutable, validated runtime settings loaded from the external {@code config.xml} document.
+ *
+ * <p>Every section and attribute is required. Units, accepted ranges, and the absence of defaults
+ * are documented in the root {@code config.xml}.
+ */
 public final class GameConfig {
+    /** Seed used to derive procedural world content. */
     public final long seed;
-    public final int chunkSize, subdivisions, renderDistance, maxChunksPerFrame;
-    public final float cameraSpeed, cameraFar;
-    public final int width, height, fpsLimit;
-    public final boolean vsync, gammaCorrection;
-    public final float waterHeight, waterTransparency, waveSpeed, waveScale, maxAmplitude;
-    public final float windChangeSpeed, windStrengthVariation;
+    /** Chunk width and depth in world units. */
+    public final int chunkSize;
+    /** Terrain grid intervals along each chunk edge. */
+    public final int subdivisions;
+    /** Maximum loaded chunk radius along each horizontal axis. */
+    public final int renderDistance;
+    /** Maximum newly built terrain chunks per frame. */
+    public final int maxChunksPerFrame;
+    /** Fly-camera movement speed in world units per second. */
+    public final float cameraSpeed;
+    /** Camera far clipping distance in world units. */
+    public final float cameraFar;
+    /** Window width in pixels. */
+    public final int width;
+    /** Window height in pixels. */
+    public final int height;
+    /** Frame-rate limit in frames per second. */
+    public final int fpsLimit;
+    /** Whether vertical synchronization is enabled. */
+    public final boolean vsync;
+    /** Whether gamma correction is enabled. */
+    public final boolean gammaCorrection;
+    /** Water plane height on the world Y axis. */
+    public final float waterHeight;
+    /** Water transparency parameter. */
+    public final float waterTransparency;
+    /** Water wave animation speed. */
+    public final float waveSpeed;
+    /** Water wave scale. */
+    public final float waveScale;
+    /** Maximum water-wave amplitude in world units. */
+    public final float maxAmplitude;
+    /** Rate at which the deterministic wind model changes in noise space. */
+    public final float windChangeSpeed;
+    /** Fractional wind-strength variation in the inclusive range [0, 1]. */
+    public final float windStrengthVariation;
+    /** Reflection texture width and height in pixels. */
     public final int reflectionMapSize;
+    /** Nonnegative multiplier applied to the base sun color. */
     public final float sunIntensity;
-    public final float grassDensity, grassDistance, grassFlowers;
-    public final float rockDensity, rockSizeScale;
+    /** Grass clumps per square metre. */
+    public final float grassDensity;
+    /** Horizontal grass visibility radius in world units. */
+    public final float grassDistance;
+    /** Flower-placement fraction in [0, 1]. */
+    public final float grassFlowers;
+    /** Main-rock density per 1000 square metres in rocky areas. */
+    public final float rockDensity;
+    /** Rock size multiplier. */
+    public final float rockSizeScale;
+    /** Whether volumetric clouds are created. */
     public final boolean cloudsEnabled;
-    public final float cloudAltitude, cloudThickness, cloudCoverage, cloudDensity, cloudWindSpeed, cloudTileMeters;
-    public final int cloudTextureSize, cloudSteps, cloudLightSteps;
+    /** Cloud base altitude in world units. */
+    public final float cloudAltitude;
+    /** Cloud-layer thickness in world units. */
+    public final float cloudThickness;
+    /** Cloud coverage fraction in [0, 1]. */
+    public final float cloudCoverage;
+    /** Cloud extinction coefficient per world unit. */
+    public final float cloudDensity;
+    /** Cloud wind speed in world units per second. */
+    public final float cloudWindSpeed;
+    /** World-space size in metres of one cloud-noise texture tile. */
+    public final float cloudTileMeters;
+    /** Square cloud-noise texture dimension in pixels (256, 512, or 1024). */
+    public final int cloudTextureSize;
+    /** Cloud ray-march sample count. */
+    public final int cloudSteps;
+    /** Cloud lighting ray-march sample count. */
+    public final int cloudLightSteps;
 
     private GameConfig(Element root) {
         Element world = element(root, "world");
@@ -101,6 +162,13 @@ public final class GameConfig {
         }
     }
 
+    /**
+     * Loads and validates a configuration file from the local filesystem.
+     *
+     * @param filename path to an XML document with a {@code gameConfig} root
+     * @return immutable settings read from the document
+     * @throws IllegalStateException if the file is missing, malformed, or fails validation
+     */
     public static GameConfig load(String filename) {
         Path path = Paths.get(filename).toAbsolutePath().normalize();
         if (!Files.isRegularFile(path)) {

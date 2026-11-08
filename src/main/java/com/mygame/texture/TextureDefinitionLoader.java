@@ -16,10 +16,18 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
-/** Lit et valide textures.xml (parsing durci comme GameConfig). */
+/** Parses the procedural texture catalog and enforces the rules documented in {@code textures.xml}. */
 final class TextureDefinitionLoader {
     private TextureDefinitionLoader() {}
 
+    /**
+     * Reads unique texture definitions from an XML stream.
+     *
+     * @param in XML source stream
+     * @param source label included in diagnostics
+     * @return definitions keyed by their declared names, preserving document order
+     * @throws IllegalStateException if parsing or validation fails
+     */
     static Map<String, TextureDefinition> load(InputStream in, String source) {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -114,7 +122,7 @@ final class TextureDefinitionLoader {
 
     private static Element first(Element parent, String name) {
         List<Element> c = children(parent, name);
-        return c.isEmpty() ? null : c.get(0);
+        return c.isEmpty() ? null : c.getFirst();
     }
 
     private static String req(Element e, String attr) {

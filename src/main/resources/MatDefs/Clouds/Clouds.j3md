@@ -1,21 +1,24 @@
-// Nuages volumétriques : ray-marching d'une couche de nuages, dessiné sur le dôme du ciel.
+// Editable material interface for the volumetric cloud shaders.
+// CloudBase/CloudThickness/TileMeters are world-space distances; Coverage is a fraction,
+// Density is extinction per world unit, and Steps/LightSteps trade quality for GPU cost.
+// Keep these parameter names synchronized with CloudManager and Shaders/Clouds.
 MaterialDef Clouds {
 
     MaterialParameters {
-        // R forme, G météo, B/A détails (voir CloudNoiseGenerator)
+        // R shape, G weather, B/A detail (see CloudNoiseGenerator)
         Texture2D NoiseMap
 
-        // Éclairage (la direction pointe VERS le soleil)
+        // Lighting (the direction points TOWARD the sun)
         Vector3 SunDirection
         Vector3 SunColor
         Vector3 AmbientColor
         Vector3 HorizonColor
 
-        // Vent : décalage courant et inclinaison des nuages avec l'altitude (mètres)
+        // Wind: current offset and cloud shear with altitude, in meters
         Vector2 WindOffset
         Vector2 Shear
 
-        // Géométrie de la couche (mètres)
+        // Cloud-layer geometry, in meters
         Float CloudBase
         Float CloudThickness
         Float TileMeters
@@ -26,7 +29,7 @@ MaterialDef Clouds {
         Float Density
         Float Erosion
 
-        // Qualité
+        // Quality
         Int Steps
         Int LightSteps
     }
@@ -41,8 +44,8 @@ MaterialDef Clouds {
             CameraPosition
         }
 
-        // Le bucket Sky est dessiné à profondeur 1 : le terrain (profondeur < 1) masque les nuages.
-        // Sortie pré-multipliée (rgb déjà multiplié par alpha).
+        // The Sky bucket is drawn at depth 1; terrain at depth < 1 occludes the clouds.
+        // Premultiplied output: RGB is already multiplied by alpha.
         RenderState {
             Blend PremultAlpha
             DepthTest On

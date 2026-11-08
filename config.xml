@@ -1,6 +1,64 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gameConfig>
 
+    <!--
+      The required document root is <gameConfig>. Runtime settings are loaded by
+      GameConfig.load("config.xml"). All nine section elements and
+      every listed attribute are required; this file format has no attribute defaults. Exactly
+      one element with each required section name must occur in the document (the loader searches
+      descendants, not just direct children). Numeric
+      values must parse as the indicated Java number type. Float settings checked as finite by
+      the loader must not be NaN or infinite. Boolean values are exactly "true" or "false".
+      Additional XML elements and attributes are not a substitute for these required settings.
+
+      world:
+        seed                  Required signed 64-bit integer; seeds procedural world content.
+      terrain:
+        chunkSize             Required positive integer; world-space chunk width/depth.
+        subdivisions          Required integer in [1, 256]; samples per chunk edge.
+                              Must divide chunkSize evenly.
+        renderDistance        Required integer in [0, 64]; chunk radius around the camera.
+        maxChunksPerFrame     Required positive integer; chunk build budget per frame.
+      camera:
+        speed                 Required finite positive movement speed (world units per second).
+        farPlane              Required finite distance greater than 1 world unit.
+      graphics:
+        width, height         Required positive integer window dimensions in pixels.
+        vsync                 Required boolean.
+        gammaCorrection       Required boolean.
+        fpsLimit              Required positive integer frame-rate limit.
+      water:
+        height                Required water-plane Y coordinate in world units. Parsed as float;
+                              unlike the other checked water floats, no range/finiteness rule is
+                              applied by GameConfig.
+        transparency          Required finite nonnegative water transparency.
+        waveSpeed             Required finite nonnegative animation speed.
+        waveScale             Required finite nonnegative wave scale.
+        maxAmplitude          Required finite nonnegative wave amplitude in world units.
+        windChangeSpeed       Required finite positive wind-variation rate.
+        windStrengthVariation Required finite fraction in [0, 1].
+        reflectionMapSize     Required positive integer reflection-map dimension in pixels.
+      lighting:
+        sunIntensity          Required finite nonnegative sun multiplier.
+      grass:
+        density               Required finite value in (0, 16] clumps per square metre.
+        distance              Required finite visibility radius in [10, 400] world units.
+        flowers               Required finite fraction in [0, 1]; 0 disables flower placement.
+      rocks:
+        density               Required finite density in [0, 50] main rocks per 1000 square metres.
+        sizeScale             Required finite size multiplier in [0.2, 4].
+      clouds:
+        enabled               Required boolean.
+        altitude              Required finite positive cloud-base altitude in world units.
+        thickness             Required finite positive cloud-layer thickness in world units.
+        coverage              Required finite fraction in [0, 1].
+        density               Required finite positive extinction coefficient (per world unit).
+        windSpeed             Required finite nonnegative speed in world units per second.
+        tileMeters            Required finite positive world-space noise-texture tile size.
+        textureSize           Required integer: 256, 512, or 1024 pixels.
+        steps                 Required integer ray-march sample count in [8, 128].
+        lightSteps            Required integer light-ray sample count in [1, 8].
+    -->
     <world seed="1" />
 
     <terrain
@@ -38,39 +96,17 @@
         sunIntensity="1.5"
     />
 
-    <!--
-      Herbe. Placement déterministe (seed du monde).
-        density  : touffes par m² (une touffe = plusieurs brins) ; 2.5 = dense, 4+ = très dense
-        distance : rayon (mètres) autour de la caméra où l'herbe existe ; fondu progressif sur les derniers 40 %
-        flowers  : quantité de fleurs (0 = aucune, 1 = prairie très fleurie) ; par plaques, selon le Perlin du monde
-    -->
     <grass
         density="2.5"
         distance="110.0"
         flowers="0.5"
     />
 
-    <!--
-      Rochers. Formes et placement déterministes (Perlin + seed du monde) : chaque rocher est unique.
-        density   : rochers « principaux » par 1000 m² dans les zones rocheuses (chacun peut avoir
-                    des cailloux autour) ; 0 désactive les rochers
-        sizeScale : multiplicateur de taille (1 = blocs jusqu'à ~2 m de rayon)
-    -->
     <rocks
         density="4.0"
         sizeScale="1.0"
     />
 
-    <!--
-      Nuages volumétriques. La forme des nuages et la direction du vent dérivent de world.seed.
-        altitude / thickness : base et épaisseur de la couche (mètres)
-        coverage             : 0 = ciel dégagé, 1 = couvert
-        density              : extinction maximale (1/m) ; plus haut = nuages plus opaques
-        windSpeed            : m/s
-        tileMeters           : taille réelle (mètres) d'une répétition de la texture de bruit
-        textureSize          : 256, 512 ou 1024
-        steps / lightSteps   : qualité du ray-marching (coût GPU)
-    -->
     <clouds
         enabled="true"
         altitude="700.0"

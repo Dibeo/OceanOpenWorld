@@ -11,21 +11,40 @@ public final class PerlinNoise {
 
     private final FastNoise noise;
 
+    /**
+     * Creates a deterministic Perlin noise source for the supplied seed.
+     *
+     * @param seed seed folded to the noise implementation's integer seed
+     */
     public PerlinNoise(long seed) {
-        int fastNoiseSeed = (int) (seed ^ (seed >>> 32));
+        int fastNoiseSeed = Long.hashCode(seed);
         noise = new FastNoise(fastNoiseSeed);
         noise.SetNoiseType(FastNoise.NoiseType.Perlin);
         noise.SetInterp(FastNoise.Interp.Quintic);
         noise.SetFrequency(1f);
     }
 
+    /**
+     * Samples non-periodic 2D Perlin noise.
+     *
+     * @param x noise-space X coordinate
+     * @param y noise-space Y coordinate
+     * @return deterministic noise value
+     */
     public double noise(double x, double y) {
         return noise.GetNoise((float) x, (float) y);
     }
 
     /**
-     * Periodic Perlin noise for seamless textures. A 2D tile is mapped onto a 3D torus so
-     * both value and slope repeat at each edge without changing the FastNoise implementation.
+     * Samples 2D Perlin noise with seamless periods on both axes. The tile is mapped onto
+     * a 3D torus so both value and slope repeat at each edge without changing FastNoise.
+     *
+     * @param x noise-space X coordinate
+     * @param y noise-space Y coordinate
+     * @param px positive period along X
+     * @param py positive period along Y
+     * @return deterministic periodic noise value
+     * @throws IllegalArgumentException if either period is not positive
      */
     public double noise(double x, double y, int px, int py) {
         if (px <= 0 || py <= 0) {
@@ -46,12 +65,31 @@ public final class PerlinNoise {
                 (float) (radiusY * Math.sin(angleY)));
     }
 
-    /** Bruit de Perlin 3D (volumes : rochers, etc.). Mêmes garanties de déterminisme que la version 2D. */
+    /**
+     * Samples deterministic non-periodic 3D Perlin noise for volumes such as rocks.
+     *
+     * @param x noise-space X coordinate
+     * @param y noise-space Y coordinate
+     * @param z noise-space Z coordinate
+     * @return noise value
+     */
     public double noise(double x, double y, double z) {
         return noise.GetNoise((float) x, (float) y, (float) z);
     }
 
-    /** fBm 3D normalisé par la somme des amplitudes (valeurs d'environ ±0,6). */
+    /**
+     * Samples normalized three-dimensional fractal Brownian motion (fBm), divided by the
+     * sum of octave amplitudes (typically around ±0.6).
+     *
+     * @param x noise-space X coordinate
+     * @param y noise-space Y coordinate
+     * @param z noise-space Z coordinate
+     * @param octaves number of noise octaves; must be positive
+     * @param persistence multiplier applied to amplitude after each octave
+     * @param lacunarity multiplier applied to frequency after each octave
+     * @return weighted sum divided by the sum of octave amplitudes
+     * @throws IllegalArgumentException if {@code octaves} is less than one
+     */
     public double fractal(double x, double y, double z, int octaves, double persistence, double lacunarity) {
         if (octaves < 1) {
             throw new IllegalArgumentException("Octaves must be positive");
@@ -66,6 +104,17 @@ public final class PerlinNoise {
         return total / sum;
     }
 
+    /**
+     * Samples normalized two-dimensional fractal Brownian motion (fBm).
+     *
+     * @param x noise-space X coordinate
+     * @param y noise-space Y coordinate
+     * @param octaves number of noise octaves; must be positive
+     * @param persistence multiplier applied to amplitude after each octave
+     * @param lacunarity multiplier applied to frequency after each octave
+     * @return weighted sum divided by the sum of octave amplitudes
+     * @throws IllegalArgumentException if {@code octaves} is less than one
+     */
     public double fractal(double x, double y, int octaves, double persistence, double lacunarity) {
         if (octaves < 1) {
             throw new IllegalArgumentException("Octaves must be positive");

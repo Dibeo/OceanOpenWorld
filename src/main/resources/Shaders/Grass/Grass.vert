@@ -1,11 +1,13 @@
 #import "Common/ShaderLib/GLSLCompat.glsllib"
 
-// Une touffe = 2 quads croisés. Attributs :
-//   inNormal    : normale du TERRAIN sous la touffe (éclairage cohérent avec le sol)
-//   inColor     : rgb = teinte (variation / herbe sèche), a = phase aléatoire du vent
-//   inTexCoord  : (u, v) dans le motif, v = 0 à la base, 1 au sommet
-//   inTexCoord2 : x = hauteur de la touffe (m), y = variante de motif (0..3, atlas 2x2), z = Y de la base
-//   inTexCoord3 : x = couleur de fleur (index de palette + variation), y = 1 si la touffe est fleurie
+// Each clump consists of two crossed quads. Attributes:
+//   inNormal    : terrain normal below the clump (keeps lighting consistent with the ground)
+//   inColor     : rgb = tint (variation / dry grass), a = random wind phase
+//   inTexCoord  : (u, v) in the pattern, with v = 0 at the base and 1 at the tip
+//   inTexCoord2 : x = clump height (m), y = pattern variant (0..3, 2x2 atlas), z = base Y
+//   inTexCoord3 : x = flower palette index and variation, y = 1 if the clump has flowers
+// Generates wind-bent grass cross-quads and passes atlas/flower coordinates to Grass.frag.
+// Vertex attribute layouts are supplied by TerrainChunk; uniforms are declared in Grass.j3md.
 attribute vec3 inPosition;
 attribute vec3 inNormal;
 attribute vec4 inColor;
@@ -22,9 +24,9 @@ uniform float m_Time;
 uniform float m_FadeStart;
 uniform float m_FadeEnd;
 
-varying vec2 vUV;        // coordonnées dans l'atlas
-varying float vT;        // hauteur locale sur le brin (0..1)
-varying float vWave;     // inclinaison due au vent : module l'éclairage (ondes de lumière)
+varying vec2 vUV;        // atlas coordinates
+varying float vT;        // local blade height in [0, 1]
+varying float vWave;     // wind lean, used to modulate lighting waves
 varying vec3 vTint;
 varying vec2 vFlower;
 varying vec3 vNormal;
@@ -36,14 +38,14 @@ void main() {
     float height = inTexCoord2.x;
     vec3 world = (g_WorldMatrix * vec4(local, 1.0)).xyz;
 
-    // Fondu en distance : la touffe s'aplatit jusqu'à une surface nulle (pas d'apparition brutale).
+    // Fade with distance by flattening each clump to zero area, avoiding a sudden pop.
     float dist = distance(world.xz, g_CameraPosition.xz);
     float fade = 1.0 - smoothstep(m_FadeStart, m_FadeEnd, dist);
     float baseY = inTexCoord2.z;
     local.y = baseY + (local.y - baseY) * fade;
 
-    // Vent : inclinaison moyenne sous le vent, modulée par des fronts de rafale qui traversent
-    // le champ, plus une oscillation propre à chaque touffe (phase aléatoire).
+    // Wind combines average downwind lean, gust fronts moving across the field, and a
+    // per-clump oscillation with a random phase.
     vec2 wd = m_WindDirection;
     float wl = length(wd);
     wd = wl > 1e-4 ? wd / wl : vec2(1.0, 0.0);
@@ -58,7 +60,7 @@ void main() {
     // Base rigide, pointe souple.
     float bend = (lean + osc) * pow(v, 1.6) * height * fade;
     local.xz += wd * bend + side * (osc * 0.35 * pow(v, 1.6) * height * fade);
-    local.y -= bend * bend * 0.6 / max(height, 0.1);   // la longueur du brin se conserve à peu près
+    local.y -= bend * bend * 0.6 / max(height, 0.1);   // approximately preserve blade length
 
     gl_Position = g_WorldViewProjectionMatrix * vec4(local, 1.0);
     vec2 cell = vec2(mod(inTexCoord2.y, 2.0), floor(inTexCoord2.y / 2.0));

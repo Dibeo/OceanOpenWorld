@@ -1,6 +1,9 @@
 MaterialDef Rock {
+    // NoiseMap channels encode broad tone, fine grain, and cracks; the shader samples it
+    // triplanarly in world space. TextureScale is metres per repeat; BumpStrength scales relief.
+    // Keep parameter names synchronized with TerrainManager and Shaders/Rock.
     MaterialParameters {
-        // R taches de ton, G grain, B fissures (voir RockTexture) ; projetée en triplanaire
+        // R broad tone, G grain, B cracks (see RockTexture); sampled triplanarly
         Texture2D NoiseMap
         Vector3 SunDirection
         Color SunColor

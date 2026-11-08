@@ -12,13 +12,16 @@ import com.mygame.config.GameConfig;
 import com.mygame.texture.TextureLibrary;
 import com.mygame.water.WindModel;
 
-/** Façade du terrain pour Main.java et les autres modules. */
+/**
+ * Terrain facade used by Main.java and other modules to coordinate procedural materials,
+ * chunk streaming, wind-driven grass, and world reseeding.
+ */
 public final class TerrainManager {
-    /** Noms des couches de texture dans textures.xml. */
+    /** Texture-layer names defined in textures.xml. */
     private static final String GRASS = "grass";
     private static final String SAND = "sand";
     private static final String GRAVEL = "gravel";
-    /** Variantes de vert mélangées par du bruit (couches 3 et 4 du terrain). */
+    /** Noise-blended green variants used by terrain layers 3 and 4. */
     private static final String GRASS_DRY = "grass_dry";
     private static final String GRASS_DEEP = "grass_deep";
     private static final String TEXTURES_XML = "/textures.xml";
@@ -38,6 +41,15 @@ public final class TerrainManager {
     private long seed;
     private float elapsedTime;
 
+    /**
+     * Creates the terrain manager with its scene, asset, camera, configuration, and wind services.
+     *
+     * @param rootNode scene node receiving terrain
+     * @param assets engine asset manager
+     * @param camera camera used for chunk and grass streaming
+     * @param config validated runtime settings
+     * @param wind shared deterministic wind model
+     */
     public TerrainManager(Node rootNode, AssetManager assets, Camera camera, GameConfig config,
                           WindModel wind) {
         this.rootNode = rootNode;
@@ -47,11 +59,16 @@ public final class TerrainManager {
         this.wind = wind;
     }
 
+    /**
+     * Loads materials and textures, then begins loading terrain for the supplied seed.
+     *
+     * @param seed world seed
+     */
     public void initialize(long seed) {
         this.seed = seed;
         generator = new TerrainGenerator(seed);
 
-        // Textures procédurales décrites dans textures.xml, dépendantes de la seed du monde.
+        // Procedural textures defined in textures.xml and derived from the world seed.
         textures = TextureLibrary.fromClasspath(TEXTURES_XML);
         textures.setSeed(seed);
 
@@ -70,7 +87,7 @@ public final class TerrainManager {
         Texture2D[] atlas = GrassTexture.create();
         material.setTexture("ColorMap", atlas[0]);
         material.setTexture("FlowerMap", atlas[1]);
-        // L'herbe rétrécit jusqu'à disparaître entre ces deux distances (mètres, horizontales).
+        // Grass shrinks to zero between these horizontal world-space distances, in meters.
         material.setFloat("FadeStart", config.grassDistance * 0.6f);
         material.setFloat("FadeEnd", config.grassDistance);
         material.setColor("AmbientColor", new ColorRGBA(0.38f, 0.39f, 0.32f, 1f));
@@ -89,7 +106,7 @@ public final class TerrainManager {
         material.setColor("AmbientColor", new ColorRGBA(0.38f, 0.39f, 0.36f, 1f));
         material.setColor("SunColor", new ColorRGBA(0.85f, 0.82f, 0.68f, 1f));
         material.setVector3("SunDirection", new Vector3f(-0.3f, -0.8f, -0.5f).normalizeLocal());
-        material.setFloat("TextureScale", 1.6f);    // mètres par répétition de la texture triplanaire
+        material.setFloat("TextureScale", 1.6f);    // meters per repeat of the triplanar texture
         material.setFloat("BumpStrength", 0.9f);
         return material;
     }
@@ -119,6 +136,11 @@ public final class TerrainManager {
         }
     }
 
+    /**
+     * Updates chunk streaming, grass animation time, and current wind uniforms.
+     *
+     * @param tpf elapsed frame time in seconds
+     */
     public void update(float tpf) {
         if (loader != null) loader.update();
         elapsedTime = (elapsedTime + tpf) % 10000f;
@@ -134,30 +156,68 @@ public final class TerrainManager {
         grassMaterial.setFloat("WindStrength", wind.getStrength());
     }
 
+    /**
+     * Updates the sun-ray direction used by terrain vegetation and rock materials.
+     *
+     * @param direction direction in which sun rays travel
+     */
     public void setSunDirection(Vector3f direction) {
         if (grassMaterial != null) grassMaterial.setVector3("SunDirection", direction);
         if (rockMaterial != null) rockMaterial.setVector3("SunDirection", direction);
     }
 
+    /**
+     * Updates the sun color used by terrain vegetation and rock materials.
+     *
+     * @param color emitted sun color
+     */
     public void setSunColor(ColorRGBA color) {
         if (grassMaterial != null) grassMaterial.setColor("SunColor", color);
         if (rockMaterial != null) rockMaterial.setColor("SunColor", color);
     }
 
+    /**
+     * Returns the current procedural terrain height at world-space X and Z coordinates.
+     *
+     * @param x world X coordinate
+     * @param z world Z coordinate
+     * @return terrain height on world Y
+     */
     public float getHeight(float x, float z) { return generator.getHeight(x, z); }
+    /**
+     * Returns the seed used by the current terrain generation.
+     *
+     * @return current world seed
+     */
     public long getSeed() { return seed; }
+    /**
+     * Returns the number of terrain chunks currently loaded.
+     *
+     * @return loaded chunk count
+     */
     public int getLoadedChunkCount() { return loader.getLoadedChunkCount(); }
+    /**
+     * Returns the scene node containing terrain, grass, and rock geometries.
+     *
+     * @return terrain scene node
+     */
     public Node getTerrainNode() { return terrainNode; }
 
+    /**
+     * Rebuilds procedural terrain and textures for a new world seed.
+     *
+     * @param newSeed new world seed
+     */
     public void regenerate(long newSeed) {
         seed = newSeed;
         generator = new TerrainGenerator(newSeed);
-        textures.setSeed(newSeed);   // textures régénérées pour la nouvelle seed
+        textures.setSeed(newSeed);   // regenerate textures for the new seed
         rockMaterial.setTexture("NoiseMap", RockTexture.create(newSeed));
         applyTextures();
         loader.regenerate(generator);
     }
 
+    /** Stops chunk workers and removes terrain geometry from its parent node. */
     public void cleanup() {
         if (loader != null) loader.shutdown();
         terrainNode.detachAllChildren();

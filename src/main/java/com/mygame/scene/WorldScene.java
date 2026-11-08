@@ -17,7 +17,10 @@ import com.mygame.terrain.TerrainManager;
 import com.mygame.water.WaterManager;
 import com.mygame.water.WindModel;
 
-/** Assemble les systèmes sans dupliquer l'état solaire. */
+/**
+ * Root scene node that initializes, updates, and tears down the world rendering systems
+ * while sharing a single source of sun state.
+ */
 public class WorldScene extends Node {
     private final GameConfig config;
     private final AssetManager assetManager;
@@ -32,6 +35,14 @@ public class WorldScene extends Node {
     private WindModel wind;
     private boolean initialized;
 
+    /**
+     * Creates the world-scene coordinator.
+     *
+     * @param assetManager engine asset manager
+     * @param camera active camera
+     * @param viewPort main viewport
+     * @param config validated runtime settings
+     */
     public WorldScene(AssetManager assetManager, Camera camera,
                       ViewPort viewPort, GameConfig config) {
         super("WorldScene");
@@ -40,14 +51,15 @@ public class WorldScene extends Node {
         this.viewPort = viewPort;
         this.config = config;
 
-        // Mise à jour automatique à chaque frame par le scene graph :
-        // Main n'a plus besoin d'appeler update().
+        // Updated automatically each frame by the scene graph:
+        // Main no longer needs to call update().
         addControl(new AbstractControl() {
             @Override protected void controlUpdate(float tpf) { WorldScene.this.update(tpf); }
             @Override protected void controlRender(RenderManager rm, ViewPort vp) { }
         });
     }
 
+    /** Initializes lighting, sky, clouds, terrain, shadows, and water in render order. */
     public void initialize() {
         if (initialized) return;
 
@@ -57,7 +69,7 @@ public class WorldScene extends Node {
         sky = new SkyManager(this, assetManager, camera, lighting);
         sky.initialize();
 
-        // Après le ciel : l'ordre d'attache fixe l'ordre de rendu dans le bucket Sky.
+        // Attach after the sky to establish draw order within the Sky bucket.
         clouds = new CloudManager(this, assetManager, camera, lighting, sky, config);
         clouds.initialize(config.seed);
 
@@ -68,8 +80,8 @@ public class WorldScene extends Node {
         terrain.setSunDirection(lighting.getSunDirection());
         terrain.setSunColor(lighting.getSunColor());
 
-        // Ombres du soleil, appliquées avant l'eau. Les chunks sont CastAndReceive ;
-        // la distance d'ombre est limitée pour ne rendre dans les shadow maps que les chunks proches.
+        // Apply sun shadows before water. Chunks both cast and receive shadows; limit the
+        // shadow distance so shadow maps only include nearby chunks.
         DirectionalLightShadowFilter shadows = new DirectionalLightShadowFilter(assetManager, 2048, 3);
         shadows.setLight(lighting.getSun());
         shadows.setLambda(0.55f);
@@ -94,20 +106,40 @@ public class WorldScene extends Node {
         water.update(tpf);
     }
 
+    /**
+     * Regenerates seed-dependent terrain and cloud content.
+     *
+     * @param seed new world seed
+     * @throws IllegalStateException if the scene has not been initialized
+     */
     public void regenerate(long seed) {
         ensureInitialized();
         terrain.regenerate(seed);
         clouds.regenerate(seed);
     }
 
+    /**
+     * Changes the shared direction in which sun rays travel.
+     *
+     * @param direction nonzero world-space ray direction
+     * @throws IllegalStateException if the scene has not been initialized
+     * @throws IllegalArgumentException if the direction is null or zero length
+     */
     public void setSunDirection(Vector3f direction) {
         ensureInitialized();
         lighting.setSunDirection(direction);
         terrain.setSunDirection(lighting.getSunDirection());
-        // Le ciel détecte le changement via LightingManager.getSunVersion().
+        // The sky detects changes through LightingManager.getSunVersion().
         water.getWaterFilter().setLightDirection(lighting.getSunDirection());
     }
 
+    /**
+     * Changes the shared sun color intensity.
+     *
+     * @param intensity finite nonnegative multiplier
+     * @throws IllegalStateException if the scene has not been initialized
+     * @throws IllegalArgumentException if the intensity is negative or non-finite
+     */
     public void setSunIntensity(float intensity) {
         ensureInitialized();
         lighting.setSunIntensity(intensity);
@@ -115,7 +147,10 @@ public class WorldScene extends Node {
         water.getWaterFilter().setLightColor(lighting.getSunColor());
     }
 
-    /** Libère threads, post-processeurs et lumières. À appeler à l'arrêt de l'application. */
+    /**
+     * Tears down scene systems and removes this node from its parent.
+     * Safe to call when the scene has not been initialized.
+     */
     public void cleanup() {
         if (!initialized) return;
         initialized = false;
@@ -134,9 +169,34 @@ public class WorldScene extends Node {
         }
     }
 
+    /**
+     * Returns the terrain manager, or {@code null} before initialization.
+     *
+     * @return terrain manager, or {@code null}
+     */
     public TerrainManager getTerrain() { return terrain; }
+    /**
+     * Returns the water manager, or {@code null} before initialization.
+     *
+     * @return water manager, or {@code null}
+     */
     public WaterManager getWater() { return water; }
+    /**
+     * Returns the sky manager, or {@code null} before initialization.
+     *
+     * @return sky manager, or {@code null}
+     */
     public SkyManager getSky() { return sky; }
+    /**
+     * Returns the cloud manager, or {@code null} before initialization.
+     *
+     * @return cloud manager, or {@code null}
+     */
     public CloudManager getClouds() { return clouds; }
+    /**
+     * Returns the lighting manager, or {@code null} before initialization.
+     *
+     * @return lighting manager, or {@code null}
+     */
     public LightingManager getLighting() { return lighting; }
 }

@@ -14,25 +14,18 @@ import java.util.Random;
 import com.jme3.util.BufferUtils;
 
 /**
- * Forme d'un rocher, entièrement déterminée par une seed de 64 bits et le bruit de Perlin du monde.
+ * Generates deterministic low-poly rock meshes from world-seeded Perlin noise and a per-rock seed.
+ * Each mesh starts with a subdivided icosphere, then applies low-frequency radius variation,
+ * several softened clipping planes, and high-frequency roughness. Rocks are stretched, flattened
+ * at the base, and slightly tilted.
  *
- * <p>Principe (du grossier au fin) :
- * <ol>
- *   <li>une icosphère subdivisée (plus de sommets pour les gros blocs) ;</li>
- *   <li>un rayon irrégulier : fBm de Perlin 3D basse fréquence ;</li>
- *   <li>5 à 8 plans de coupe aléatoires, fondus par un « min lissé » : les faces plates et les arêtes
- *       adoucies d'un vrai bloc rocheux ;</li>
- *   <li>une rugosité fine (Perlin 3D haute fréquence) ;</li>
- *   <li>un étirement (rochers plus larges que hauts, parfois allongés), une base aplatie (enterrée)
- *       et une légère inclinaison.</li>
- * </ol>
- * La couleur de chaque sommet porte la teinte du rocher, l'occlusion (pied et creux sombres) et la
- * mousse sur les faces tournées vers le haut ; l'alpha de la couleur est l'occlusion.
+ * <p>Vertex colors encode rock tint, ambient occlusion in the alpha channel, and moss on upward-facing
+ * surfaces. Mesh data is accumulated in chunk-local coordinates for terrain construction.
  */
 final class RockShape {
     private static final float TWO_PI = (float) (Math.PI * 2.0);
 
-    /** Sphère unité maillée : directions et triangles. Immuable, partagée entre threads. */
+    /** Immutable unit-sphere directions and triangles, shared between threads. */
     private static final class Sphere {
         final float[] dirs;
         final int[] indices;
@@ -50,12 +43,12 @@ final class RockShape {
 
     private RockShape() { }
 
-    /** Niveau de subdivision selon la taille : 42, 162 ou 642 sommets. */
+    /** Selects the cached icosphere subdivision level appropriate for a rock radius. */
     static int levelFor(float radius) {
         return radius >= 0.7f ? 3 : radius >= 0.22f ? 2 : 1;
     }
 
-    /** Tampons extensibles où s'accumulent les rochers d'un chunk. */
+    /** Growable per-chunk accumulators for vertex attributes, indices, and bounds. */
     static final class Buffers {
         private float[] positions = new float[3 * 1024], normals = new float[3 * 1024], colors = new float[4 * 1024];
         private int[] indices = new int[6 * 1024];
@@ -97,7 +90,7 @@ final class RockShape {
         }
     }
 
-    /** Maillage fusionné des rochers d'un chunk (coordonnées locales au chunk). */
+    /** Immutable combined mesh buffers and bounds for generated rocks in one chunk. */
     static final class RockData {
         final FloatBuffer positions, normals, colors;
         final IntBuffer indices;
@@ -116,31 +109,35 @@ final class RockShape {
     }
 
     /**
-     * Ajoute un rocher.
+     * Appends one seed-determined rock mesh to a chunk accumulator.
      *
-     * @param noise  bruit de forme du monde (dépend de la seed du monde)
-     * @param seed   seed du rocher : même seed, même rocher
-     * @param radius rayon moyen en mètres
-     * @param moss   quantité de mousse possible (0..1), selon le sol
+     * @param out target mesh accumulator
+     * @param noise world-seeded 3D shape noise
+     * @param seed per-rock seed
+     * @param cx rock center X in chunk-local coordinates
+     * @param cy rock center Y in world height coordinates
+     * @param cz rock center Z in chunk-local coordinates
+     * @param radius mean rock radius in world units
+     * @param moss possible moss amount in [0, 1]
      */
     static void add(Buffers out, PerlinNoise noise, long seed, float cx, float cy, float cz,
                     float radius, float moss) {
         Random rnd = new Random(seed);
         Sphere sphere = SPHERES[levelFor(radius)];
 
-        // Proportions : plus large que haut, parfois allongé.
+        // Make rocks wider than tall, with occasional elongated shapes.
         float sx = radius * (0.85f + 0.55f * rnd.nextFloat());
         float sz = radius * (0.85f + 0.55f * rnd.nextFloat());
         float sy = radius * (0.62f + 0.55f * rnd.nextFloat());
         double ox = rnd.nextDouble() * 1000.0, oy = rnd.nextDouble() * 1000.0, oz = rnd.nextDouble() * 1000.0;
 
-        // Rotation : lacet quelconque, léger tangage et roulis.
+        // Apply arbitrary yaw with slight pitch and roll.
         float yaw = rnd.nextFloat() * TWO_PI, pitch = (rnd.nextFloat() - 0.5f) * 0.5f, roll = (rnd.nextFloat() - 0.5f) * 0.5f;
         float cyaw = (float) Math.cos(yaw), syaw = (float) Math.sin(yaw);
         float cp = (float) Math.cos(pitch), sp = (float) Math.sin(pitch);
         float cr = (float) Math.cos(roll), sr = (float) Math.sin(roll);
 
-        // Plans de coupe : faces plates.
+        // Clipping planes create flat faces.
         int planes = 6 + rnd.nextInt(4);
         float[] pn = new float[planes * 3];
         float[] po = new float[planes];
@@ -151,7 +148,7 @@ final class RockShape {
             po[i] = 0.66f + 0.22f * rnd.nextFloat();
         }
 
-        // Teinte : gris chaud ou froid (albédo linéaire d'une roche sombre à claire).
+        // Choose a warm or cool gray tint in linear albedo space.
         float lum = 0.045f + 0.10f * rnd.nextFloat();
         float warm = (rnd.nextFloat() - 0.5f) * 0.16f;
         float tintR = lum * (1f + warm * 2f), tintG = lum * (1f + warm * 0.6f), tintB = lum * (1f - warm * 1.6f);
@@ -162,30 +159,31 @@ final class RockShape {
         float[] localY = new float[v];
         for (int i = 0; i < v; i++) {
             float dx = sphere.dirs[i * 3], dy = sphere.dirs[i * 3 + 1], dz = sphere.dirs[i * 3 + 2];
-            // 1. Rayon irrégulier basse fréquence.
+            // 1. Low-frequency irregular radius.
             float r = (float) (1.0 + 0.50 * noise.fractal(dx * 1.4 + ox, dy * 1.4 + oy, dz * 1.4 + oz, 3, 0.5, 2.0));
-            // 2. Plans de coupe, fondus avec un min lissé (arêtes adoucies).
+            // 2. Clipping planes blended with a smooth minimum to soften edges.
             for (int p = 0; p < planes; p++) {
                 float dn = dx * pn[p * 3] + dy * pn[p * 3 + 1] + dz * pn[p * 3 + 2];
-                if (dn > 0.02f) r = smoothMin(r, po[p] / dn, 0.08f);
+                if (dn > 0.02f) r = smoothMin(r, po[p] / dn);
             }
-            // 3. Rugosité fine.
+            // 3. Fine roughness.
             r += 0.035f * (float) noise.fractal(dx * 6.0 + ox, dy * 6.0 + oy, dz * 6.0 + oz, 2, 0.5, 2.0);
             r = Math.max(r, 0.35f);
             rho[i] = r;
 
             float lx = dx * r * sx, ly = dy * r * sy, lz = dz * r * sz;
-            ly = Math.max(ly, -0.55f * sy);                  // base aplatie (elle est enterrée)
+            ly = Math.max(ly, -0.55f * sy);                  // flattened, partially buried base
             localY[i] = ly / sy;
-            // Rotation : roulis (Z), tangage (X), puis lacet (Y).
-            float x1 = lx * cr - ly * sr, y1 = lx * sr + ly * cr, z1 = lz;
-            float y2 = y1 * cp - z1 * sp, z2 = y1 * sp + z1 * cp;
+            // Rotate in roll (Z), pitch (X), then yaw (Y).
+            float x1 = lx * cr - ly * sr;
+            float y1 = lx * sr + ly * cr;
+            float y2 = y1 * cp - lz * sp, z2 = y1 * sp + lz * cp;
             px[i] = cx + x1 * cyaw + z2 * syaw;
             py[i] = cy + y2;
             pz[i] = cz - x1 * syaw + z2 * cyaw;
         }
 
-        // Normales lisses (somme des normales de face pondérées par l'aire).
+        // Smooth normals from the area-weighted sum of adjacent face normals.
         float[] nx = new float[v], ny = new float[v], nz = new float[v];
         int[] idx = sphere.indices;
         for (int t = 0; t < idx.length; t += 3) {
@@ -204,19 +202,19 @@ final class RockShape {
             float len = (float) Math.sqrt(nx[i] * nx[i] + ny[i] * ny[i] + nz[i] * nz[i]);
             if (len < 1e-8f) { nx[i] = 0f; ny[i] = 1f; nz[i] = 0f; } else { nx[i] /= len; ny[i] /= len; nz[i] /= len; }
 
-            // Occlusion : pied et creux sombres. h01 : 0 en bas, 1 au sommet.
+            // Darken the base and cavities. h01 ranges from 0 at the bottom to 1 at the top.
             float h01 = Math.max(0f, Math.min(1f, (localY[i] + 0.55f) / 1.55f));
-            float cavity = Math.max(0.6f, Math.min(1.05f, 0.55f + (rho[i] - 0.6f) * 1.0f));
+            float cavity = Math.max(0.6f, Math.min(1.05f, 0.55f + (rho[i] - 0.6f)));
             float ao = (0.40f + 0.60f * smoothstep(0.05f, 0.6f, h01)) * cavity;
 
-            // Strates / variations de ton : bruit 3D moyenne fréquence.
+            // Add strata and tone variation with medium-frequency 3D noise.
             float variation = 0.85f + 0.30f * (float) (noise.fractal(px[i] * 1.7 + ox, py[i] * 1.7 + oy, pz[i] * 1.7 + oz, 2, 0.5, 2.0) + 0.5);
             float r = tintR * variation, g = tintG * variation, b = tintB * variation;
 
-            // Terre au pied.
+            // Add soil coloring at the base.
             float soil = 1f - smoothstep(0.05f, 0.30f, h01);
             r += (0.040f - r) * soil * 0.6f; g += (0.031f - g) * soil * 0.6f; b += (0.020f - b) * soil * 0.6f;
-            // Mousse sur les faces tournées vers le haut, par plaques.
+            // Add moss patches to upward-facing surfaces.
             float patches = (float) noise.fractal(px[i] * 3.1 + oy, py[i] * 3.1 + oz, pz[i] * 3.1 + ox, 2, 0.5, 2.0) + 0.5f;
             float m = mossAmount * smoothstep(0.55f, 0.92f, ny[i]) * smoothstep(0.30f, 0.75f, patches);
             r += (0.020f - r) * m * 0.85f; g += (0.060f - g) * m * 0.85f; b += (0.010f - b) * m * 0.85f;
@@ -234,10 +232,10 @@ final class RockShape {
         out.vertices += v;
     }
 
-    /** Min lissé polynomial : arrondit la jonction de deux surfaces sur une largeur k. */
-    private static float smoothMin(float a, float b, float k) {
-        float h = Math.max(k - Math.abs(a - b), 0f) / k;
-        return Math.min(a, b) - h * h * k * 0.25f;
+    /** Polynomial smooth minimum that rounds the join between two surfaces over width {@code k}. */
+    private static float smoothMin(float a, float b) {
+        float h = Math.max((float) 0.08 - Math.abs(a - b), 0f) / (float) 0.08;
+        return Math.min(a, b) - h * h * (float) 0.08 * 0.25f;
     }
 
     private static float smoothstep(float edge0, float edge1, float x) {
@@ -245,7 +243,7 @@ final class RockShape {
         return t * t * (3f - 2f * t);
     }
 
-    /** Icosaèdre subdivisé {@code level} fois, projeté sur la sphère unité. */
+    /** Builds an icosphere subdivided {@code level} times and projected onto the unit sphere. */
     private static Sphere icosphere(int level) {
         float t = (1f + (float) Math.sqrt(5.0)) / 2f;
         float[][] base = {

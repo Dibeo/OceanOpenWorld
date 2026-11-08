@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+/** Verifies that the grass material definition and its expected parameters load. */
 final class GrassMaterialTest {
     @Test
     void grassMaterialDefinitionLoadsFromResources() {

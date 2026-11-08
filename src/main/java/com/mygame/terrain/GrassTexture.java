@@ -10,18 +10,14 @@ import java.nio.ByteBuffer;
 import java.util.Random;
 
 /**
- * Atlas 2×2 de motifs de touffe (4 variantes : le shader en choisit une par plan, donc deux
- * touffes voisines ne se ressemblent pas). Chaque case contient plusieurs brins courbes et effilés ;
- * v = 0 à la base, v = 1 au sommet. L'alpha porte la découpe ; la couleur est une légère variation
- * par brin (frais ↔ plus vieux et jaune), multipliée dans le shader par la teinte de la touffe.
- * Contenu fixe (indépendant de la seed du monde).
+ * Builds a fixed 2-by-2 atlas of grass-blade patterns and its aligned flower-mask texture.
+ * Each cell contains curved, tapered blades with an alpha mask and subtle age-based color
+ * variation. Shaders select among four patterns per plane, so neighboring clumps can differ.
  *
- * <p>Chaque motif a aussi 1 à 3 tiges fines et hautes qui se terminent par une tête de fleur. La tête
- * n'est PAS dans l'atlas de couleur : elle est dans une seconde texture alignée (R = pétales, G = cœur),
- * pour que le shader ne l'affiche que sur les touffes fleuries (et la colore selon leur palette).
- *
- * <p>Les brins restent à distance des bords de leur case (racines dans [0,12 ; 0,88], pointes sous
- * 0,94) pour que les mipmaps ne mélangent pas les cases voisines.
+ * <p>Each pattern also contains one to three flower stalks. Petals and centers are stored in
+ * the second texture (red and green channels) so shaders can show flowers only on marked
+ * clumps and apply the selected palette. Blades stay away from cell edges to prevent mipmaps
+ * from blending neighboring patterns.
  */
 final class GrassTexture {
     static final int CELL = 128;
@@ -29,23 +25,27 @@ final class GrassTexture {
     private static final float TWO_PI = (float) (Math.PI * 2.0);
     private static final long PATTERN_SEED = 0x6A09E667L;
 
-    /** Paramètres d'un motif : nombre de brins, largeur de base, hauteur minimale, inclinaison max. */
+    /** Number of blades, base width, minimum height, and maximum lean for a pattern. */
     private record Pattern(int blades, float width, float minHeight, float lean) { }
 
     private static final Pattern[] PATTERNS = {
-            new Pattern(9, 0.030f, 0.55f, 0.34f),    // touffe classique
-            new Pattern(6, 0.044f, 0.62f, 0.26f),    // larges brins, plus rigides
-            new Pattern(13, 0.022f, 0.50f, 0.42f),   // fins, nombreux, retombants
-            new Pattern(8, 0.034f, 0.34f, 0.50f),    // mélange de brins courts et très penchés
+            new Pattern(9, 0.030f, 0.55f, 0.34f),    // classic clump
+            new Pattern(6, 0.044f, 0.62f, 0.26f),    // broad, stiffer blades
+            new Pattern(13, 0.022f, 0.50f, 0.42f),   // numerous thin, drooping blades
+            new Pattern(8, 0.034f, 0.34f, 0.50f),    // short blades with pronounced lean
     };
 
-    /** Tiges fleuries par motif. */
+    /** Number of flower stalks per pattern. */
     private static final int[] STALKS = {2, 1, 3, 2};
     private static final float HEAD_RADIUS = 7.5f;   // pixels
 
     private GrassTexture() { }
 
-    /** @return {atlas de touffes, masque des fleurs} : mêmes dimensions, mêmes UV. */
+    /**
+     * Creates the grass color atlas and matching flower mask with identical dimensions and UVs.
+     *
+     * @return two same-sized textures in order: grass blades, then flower mask
+     */
     static Texture2D[] create() {
         float[] alpha = new float[ATLAS * ATLAS];
         float[] petals = new float[ATLAS * ATLAS], centers = new float[ATLAS * ATLAS];
@@ -64,12 +64,12 @@ final class GrassTexture {
                 float halfWidth = pattern.width() * (0.8f + 0.5f * random.nextFloat());
                 float lean = (random.nextFloat() - 0.5f) * pattern.lean();
                 float curl = (random.nextFloat() - 0.5f) * 0.14f;
-                float age = random.nextFloat() * random.nextFloat();       // la plupart des brins sont frais
+                float age = random.nextFloat() * random.nextFloat();       // most blades are fresh
                 float brightness = 0.78f + 0.22f * random.nextFloat();
                 drawBlade(alpha, red, green, blue, originX, originY, root, height, halfWidth, lean, curl,
                         brightness, age);
             }
-            // Tiges fleuries : fines, hautes ; la tête est dessinée dans le masque, à la pointe.
+            // Flower stalks are thin and tall; draw each flower head in the mask at its tip.
             for (int i = 0; i < STALKS[variant]; i++) {
                 float root = 0.20f + 0.60f * random.nextFloat();
                 float tipV = 0.68f + 0.18f * random.nextFloat();
@@ -100,14 +100,14 @@ final class GrassTexture {
         Texture2D texture = new Texture2D(new Image(Image.Format.RGBA8, ATLAS, ATLAS, pixels, ColorSpace.Linear));
         texture.setWrap(Texture.WrapMode.Clamp);
         texture.setMagFilter(Texture.MagFilter.Bilinear);
-        // Trilinear : jME génère les mipmaps (voir Texture.setMinFilter). Le shader compense
-        // l'amincissement de l'alpha aux mips élevés.
+        // Trilinear filtering makes jME generate mipmaps (see Texture.setMinFilter). The shader
+        // compensates for alpha becoming thinner at higher mip levels.
         texture.setMinFilter(Texture.MinFilter.Trilinear);
         texture.setAnisotropicFilter(4);
         return texture;
     }
 
-    /** Tête de fleur : pétales en lobes (rayon modulé par cos(n·θ)) et cœur circulaire, anti-aliasés. */
+    /** Draws an antialiased flower head with cosine-modulated petals and a circular center. */
     private static void drawHead(float[] petals, float[] centers, float cx, float cy, int petalCount, float phase) {
         int r = (int) Math.ceil(HEAD_RADIUS) + 1;
         for (int dy = -r; dy <= r; dy++) {
@@ -137,22 +137,22 @@ final class GrassTexture {
         for (int y = 0; y < CELL; y++) {
             float v = (y + 0.5f) / CELL;
             if (v > height) break;
-            float t = v / height;                                // 0 base .. 1 pointe
+            float t = v / height;                                // 0 at base .. 1 at tip
             float center = root + lean * t * t + curl * (float) Math.sin(t * Math.PI);
             float halfWidth = baseHalfWidth * (float) Math.pow(1f - t, 0.85) + 0.004f;
             for (int x = 0; x < CELL; x++) {
                 float u = (x + 0.5f) / CELL;
-                float edge = (halfWidth - Math.abs(u - center)) * CELL;   // distance au bord en pixels
+                float edge = (halfWidth - Math.abs(u - center)) * CELL;   // distance to the edge in pixels
                 float coverage = Math.max(0f, Math.min(1f, edge + 0.5f));
                 if (coverage <= 0f) continue;
                 int i = (originY + y) * ATLAS + originX + x;
-                float side = (u - center) / halfWidth;               // -1 .. 1 sur la largeur du brin
-                // Nervure centrale sombre, flanc gauche plus ombré : le brin paraît plié en V.
+                float side = (u - center) / halfWidth;               // -1 .. 1 across the blade width
+                // A dark central vein and shaded left side make the blade appear folded into a V.
                 float vein = 1f - 0.14f * Math.max(0f, 1f - Math.abs(side) * 3f);
                 float fold = 1f - 0.10f * (side * 0.5f + 0.5f);
                 float shade = brightness * vein * fold;
                 if (coverage >= alpha[i]) {
-                    // Brin plus vieux : moins de bleu, un peu plus de rouge (jaunit).
+                    // Older blades have less blue and slightly more red, producing a yellow tint.
                     red[i] = shade * (1f + 0.25f * age);
                     green[i] = shade * (1f - 0.04f * age);
                     blue[i] = shade * (1f - 0.40f * age);
