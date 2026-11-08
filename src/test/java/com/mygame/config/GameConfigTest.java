@@ -44,6 +44,10 @@ final class GameConfigTest {
                   <water height="0" transparency="0" waveSpeed="0" waveScale="0" maxAmplitude="1"
                          windChangeSpeed="0.015" windStrengthVariation="%s" reflectionMapSize="1"/>
                   <lighting sunIntensity="1"/>
+                  <grass density="1" distance="10" flowers="0"/>
+                  <rocks density="0" sizeScale="1"/>
+                  <clouds enabled="false" altitude="1" thickness="1" coverage="0" density="0.01"
+                          windSpeed="0" tileMeters="1" textureSize="256" steps="8" lightSteps="1"/>
                 </gameConfig>
                 """.formatted(variation);
         Path file = tempDir.resolve("config.xml");
