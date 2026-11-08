@@ -9,11 +9,15 @@ import com.jme3.renderer.ViewPort;
 import com.jme3.scene.Node;
 import com.jme3.water.WaterFilter;
 import com.mygame.config.GameConfig;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Configures and updates the jMonkeyEngine water filter and its post-processing pipeline.
  */
 public class WaterManager {
+    private static final Logger LOG = LogManager.getLogger(WaterManager.class);
+
     private final Node reflectionScene;
     private final AssetManager assets;
     private final ViewPort viewPort;
@@ -52,6 +56,8 @@ public class WaterManager {
     public void initialize(Filter... preFilters) {
         if (water != null) return;
 
+        LOG.debug("Initializing water filter at height {} with reflection map size {}",
+                config.waterHeight, config.reflectionMapSize);
         water = new WaterFilter(reflectionScene, sunDirection);
         water.setWaterHeight(config.waterHeight);
         water.setWaterColor(new ColorRGBA(0.025f, 0.22f, 0.28f, 1f));
@@ -78,6 +84,7 @@ public class WaterManager {
         for (Filter f : preFilters) fpp.addFilter(f);
         fpp.addFilter(water);
         viewPort.addProcessor(fpp);
+        LOG.debug("Water filter initialized");
     }
 
     /**
@@ -111,6 +118,7 @@ public class WaterManager {
 
     /** Removes and cleans up the post-processor; safe to call when not initialized. */
     public void cleanup() {
+        LOG.debug("Cleaning up water filter");
         if (fpp != null) {
             viewPort.removeProcessor(fpp);
             fpp.cleanup();

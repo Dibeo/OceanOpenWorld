@@ -6,12 +6,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Loads the procedural texture catalog from the classpath and caches generated textures
  * for the current world seed. The cache is cleared by {@link #setSeed(long)}.
  */
 public final class TextureLibrary {
+    private static final Logger LOG = LogManager.getLogger(TextureLibrary.class);
+
     private final Map<String, TextureDefinition> definitions;
     private final Map<String, Texture> cache = new HashMap<>();
     private long seed;
@@ -29,9 +33,15 @@ public final class TextureLibrary {
      */
     public static TextureLibrary fromClasspath(String resource) {
         try (InputStream in = TextureLibrary.class.getResourceAsStream(resource)) {
-            if (in == null) throw new IllegalStateException("Resource not found: " + resource);
-            return new TextureLibrary(TextureDefinitionLoader.load(in, resource));
+            if (in == null) {
+                LOG.error("Texture catalog not found on classpath: {}", resource);
+                throw new IllegalStateException("Resource not found: " + resource);
+            }
+            TextureLibrary library = new TextureLibrary(TextureDefinitionLoader.load(in, resource));
+            LOG.debug("Loaded texture library from {}", resource);
+            return library;
         } catch (IOException e) {
+            LOG.error("Unable to read texture catalog {}", resource, e);
             throw new IllegalStateException("Unable to read " + resource + ": " + e.getMessage(), e);
         }
     }
@@ -44,6 +54,7 @@ public final class TextureLibrary {
     public void setSeed(long seed) {
         this.seed = seed;
         cache.clear();
+        LOG.debug("Texture seed set to {}; cleared generated texture cache", seed);
     }
 
     /**
@@ -55,7 +66,10 @@ public final class TextureLibrary {
      * @throws IllegalStateException if the definition has no diffuse map
      */
     public Texture diffuse(String name) {
-        return cache.computeIfAbsent(name + ":d", k -> configure(ProceduralTextureGenerator.diffuse(def(name), seed)));
+        return cache.computeIfAbsent(name + ":d", k -> {
+            LOG.debug("Generating diffuse texture '{}' with seed {}", name, seed);
+            return configure(ProceduralTextureGenerator.diffuse(def(name), seed));
+        });
     }
 
     /**
@@ -67,7 +81,10 @@ public final class TextureLibrary {
      * @throws IllegalStateException if the definition has no normal map
      */
     public Texture normal(String name) {
-        return cache.computeIfAbsent(name + ":n", k -> configure(ProceduralTextureGenerator.normal(def(name), seed)));
+        return cache.computeIfAbsent(name + ":n", k -> {
+            LOG.debug("Generating normal texture '{}' with seed {}", name, seed);
+            return configure(ProceduralTextureGenerator.normal(def(name), seed));
+        });
     }
 
     /**

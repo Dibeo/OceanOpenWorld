@@ -15,9 +15,13 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /** Parses the procedural texture catalog and enforces the rules documented in {@code textures.xml}. */
 final class TextureDefinitionLoader {
+    private static final Logger LOG = LogManager.getLogger(TextureDefinitionLoader.class);
+
     private TextureDefinitionLoader() {}
 
     /**
@@ -51,8 +55,10 @@ final class TextureDefinitionLoader {
                     throw new IllegalArgumentException("Duplicate texture: " + def.name);
                 }
             }
+            LOG.debug("Loaded {} texture definitions from {}", result.size(), source);
             return result;
         } catch (Exception e) {
+            LOG.error("Unable to load texture definitions from {}", source, e);
             throw new IllegalStateException("Unable to read " + source + ": " + e.getMessage(), e);
         }
     }

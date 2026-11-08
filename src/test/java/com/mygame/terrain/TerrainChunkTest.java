@@ -34,28 +34,29 @@ final class TerrainChunkTest {
     }
 
     @Test
-    void generatedBlendMapContainsAnRgbWeightForEveryTerrainVertex() {
+    void generatedBlendMapsContainRgbaWeightsForEveryTerrainVertex() {
         int subdivisions = 32;
         TerrainChunk.Data data = TerrainChunk.generate(
-                0, 0, new TerrainGenerator(42L), 64, subdivisions, 0f);
+                0, 0, new TerrainGenerator(42L), 64, subdivisions, 0f, 0f, 1f);
 
         assertEquals(subdivisions + 1, data.blendMapSize);
-        assertEquals((subdivisions + 1) * (subdivisions + 1) * 3, data.blendMap.remaining());
+        assertEquals((subdivisions + 1) * (subdivisions + 1) * 4, data.blendMap.remaining());
+        assertEquals((subdivisions + 1) * (subdivisions + 1) * 4, data.blendMap1.remaining());
     }
 
     @Test
     void adjacentChunksHaveMatchingBlendWeightsAtTheirSharedEdge() {
         int subdivisions = 32;
         TerrainGenerator generator = new TerrainGenerator(42L);
-        TerrainChunk.Data west = TerrainChunk.generate(0, 0, generator, 64, subdivisions, 0f);
-        TerrainChunk.Data east = TerrainChunk.generate(1, 0, generator, 64, subdivisions, 0f);
+        TerrainChunk.Data west = TerrainChunk.generate(0, 0, generator, 64, subdivisions, 0f, 0f, 1f);
+        TerrainChunk.Data east = TerrainChunk.generate(1, 0, generator, 64, subdivisions, 0f, 0f, 1f);
         ByteBuffer westMap = west.blendMap.duplicate();
         ByteBuffer eastMap = east.blendMap.duplicate();
 
         for (int z = 0; z <= subdivisions; z++) {
-            int westEdge = (z * west.blendMapSize + subdivisions) * 3;
-            int eastEdge = z * east.blendMapSize * 3;
-            for (int channel = 0; channel < 3; channel++) {
+            int westEdge = (z * west.blendMapSize + subdivisions) * 4;
+            int eastEdge = z * east.blendMapSize * 4;
+            for (int channel = 0; channel < 4; channel++) {
                 assertEquals(westMap.get(westEdge + channel), eastMap.get(eastEdge + channel));
             }
         }
@@ -68,8 +69,10 @@ final class TerrainChunkTest {
         int grassChunkX = 0, grassChunkZ = 0;
         for (int z = -4; z <= 4 && first == null; z++) {
             for (int x = -4; x <= 4; x++) {
-                TerrainChunk.Data candidate = TerrainChunk.generate(x, z, generator, 64, 32, 0f);
-                if (candidate.grass.indexCount > 0) {
+                TerrainChunk.Data candidate = TerrainChunk.generate(x, z, generator, 64, 32, 0f, 0f, 1f);
+                TerrainChunk.GrassData grass = TerrainChunk.generateGrass(
+                        x, z, generator, candidate.heights, candidate.heightSide, 64, 32, 0f, 2.5f, 0.5f);
+                if (grass.indexCount > 0) {
                     first = candidate;
                     grassChunkX = x;
                     grassChunkZ = z;
@@ -78,13 +81,18 @@ final class TerrainChunkTest {
             }
         }
         assertNotNull(first, "The sampled world area should contain grassy terrain");
+        TerrainGenerator secondGenerator = new TerrainGenerator(42L);
         TerrainChunk.Data second = TerrainChunk.generate(
-                grassChunkX, grassChunkZ, new TerrainGenerator(42L), 64, 32, 0f);
+                grassChunkX, grassChunkZ, secondGenerator, 64, 32, 0f, 0f, 1f);
+        TerrainChunk.GrassData firstGrass = TerrainChunk.generateGrass(
+                grassChunkX, grassChunkZ, generator, first.heights, first.heightSide, 64, 32, 0f, 2.5f, 0.5f);
+        TerrainChunk.GrassData secondGrass = TerrainChunk.generateGrass(
+                grassChunkX, grassChunkZ, secondGenerator, second.heights, second.heightSide, 64, 32, 0f, 2.5f, 0.5f);
 
-        assertEquals(first.grass.positions, second.grass.positions);
-        assertEquals(first.grass.uvs, second.grass.uvs);
+        assertEquals(firstGrass.positions, secondGrass.positions);
+        assertEquals(firstGrass.uvs, secondGrass.uvs);
 
-        FloatBuffer positions = first.grass.positions.duplicate();
+        FloatBuffer positions = firstGrass.positions.duplicate();
         while (positions.hasRemaining()) {
             float y = positions.get(positions.position() + 1);
             assertTrue(y > 0.5f, "Grass bases must lie on the grassy side of the shoreline");
@@ -95,8 +103,10 @@ final class TerrainChunkTest {
     @Test
     void grassIsOmittedWhenTheChunkHasNoGrassSurface() {
         TerrainChunk.Data data = TerrainChunk.generate(
-                0, 0, new TerrainGenerator(42L), 64, 32, 1000f);
+                0, 0, new TerrainGenerator(42L), 64, 32, 1000f, 0f, 1f);
+        TerrainChunk.GrassData grass = TerrainChunk.generateGrass(
+                0, 0, new TerrainGenerator(42L), data.heights, data.heightSide, 64, 32, 1000f, 2.5f, 0.5f);
 
-        assertEquals(0, data.grass.indexCount);
+        assertEquals(0, grass.indexCount);
     }
 }

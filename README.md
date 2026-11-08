@@ -62,6 +62,21 @@ Windows:
 .\gradlew.bat run
 ```
 
+Application logs are always written at DEBUG level or higher to `logs/openworld.log`
+(with older logs rotated). Add `-l` or `--logs` to also show them in the console:
+
+Linux/macOS:
+
+```bash
+./gradlew run --args="--logs"
+```
+
+Windows:
+
+```powershell
+.\gradlew.bat run --args="--logs"
+```
+
 To run the test suite:
 
 ```bash

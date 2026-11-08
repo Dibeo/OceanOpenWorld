@@ -8,7 +8,10 @@ import com.jme3.system.AppSettings;
 
 import com.mygame.camera.CameraManager;
 import com.mygame.config.GameConfig;
+import com.mygame.logging.LoggingConfiguration;
 import com.mygame.scene.WorldScene;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Application entry point for the desktop OpenWorld demo.
@@ -17,6 +20,7 @@ import com.mygame.scene.WorldScene;
  */
 public class Main extends SimpleApplication {
 
+    private final Logger logger = LogManager.getLogger(Main.class);
     private final GameConfig config;
     private WorldScene worldScene;
 
@@ -33,10 +37,19 @@ public class Main extends SimpleApplication {
     /**
      * Loads the root-level configuration and starts the desktop application.
      *
-     * @param args command-line arguments; currently unused
+     * @param args command-line arguments; {@code -l} or {@code --logs} also enables console logging
      */
     public static void main(String[] args) {
-        GameConfig config = GameConfig.load("config.xml");
+        LoggingConfiguration.initialize(args);
+        Logger logger = LogManager.getLogger(Main.class);
+        logger.info("Starting OpenWorld");
+        GameConfig config;
+        try {
+            config = GameConfig.load("config.xml");
+        } catch (RuntimeException e) {
+            logger.error("Application startup failed while loading configuration", e);
+            throw e;
+        }
         Main app = new Main(config);
 
         AppSettings settings = new AppSettings(true);
@@ -49,12 +62,19 @@ public class Main extends SimpleApplication {
 
         app.setSettings(settings);
         app.setShowSettings(false);
-        app.start();
+        logger.info("Starting game window at {}x{}", config.width, config.height);
+        try {
+            app.start();
+        } catch (RuntimeException e) {
+            logger.error("Application failed while running", e);
+            throw e;
+        }
     }
 
     /** Initializes camera controls and attaches the configured world scene. */
     @Override
     public void simpleInitApp() {
+        logger.info("Initializing OpenWorld scene");
         // The world uses only two lights, so one shader pass is enough
         // instead of one pass per light in MultiPass mode.
         renderManager.setPreferredLightMode(TechniqueDef.LightMode.SinglePass);
@@ -70,6 +90,7 @@ public class Main extends SimpleApplication {
         worldScene = new WorldScene(assetManager, cam, viewPort, config);
         rootNode.attachChild(worldScene);
         worldScene.initialize();
+        logger.info("OpenWorld scene initialized");
         // WorldScene updates through a Control invoked automatically by the scene graph,
         // so no simpleUpdate() override is needed.
     }
@@ -77,6 +98,7 @@ public class Main extends SimpleApplication {
     /** Releases world resources before delegating shutdown to the engine. */
     @Override
     public void destroy() {
+        logger.info("Shutting down OpenWorld");
         if (worldScene != null) worldScene.cleanup();
         super.destroy();
     }

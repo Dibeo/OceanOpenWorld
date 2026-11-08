@@ -16,12 +16,16 @@ import com.mygame.sky.SkyManager;
 import com.mygame.terrain.TerrainManager;
 import com.mygame.water.WaterManager;
 import com.mygame.water.WindModel;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Root scene node that initializes, updates, and tears down the world rendering systems
  * while sharing a single source of sun state.
  */
 public class WorldScene extends Node {
+    private static final Logger LOG = LogManager.getLogger(WorldScene.class);
+
     private final GameConfig config;
     private final AssetManager assetManager;
     private final Camera camera;
@@ -63,6 +67,7 @@ public class WorldScene extends Node {
     public void initialize() {
         if (initialized) return;
 
+        LOG.debug("Initializing world systems for seed {}", config.seed);
         lighting = new LightingManager(this);
         lighting.initialize(config.sunIntensity);
 
@@ -95,6 +100,7 @@ public class WorldScene extends Node {
         water.getWaterFilter().setLightColor(lighting.getSunColor());
 
         initialized = true;
+        LOG.info("World systems initialized");
     }
 
     private void update(float tpf) {
@@ -114,6 +120,7 @@ public class WorldScene extends Node {
      */
     public void regenerate(long seed) {
         ensureInitialized();
+        LOG.info("Regenerating world content with seed {}", seed);
         terrain.regenerate(seed);
         clouds.regenerate(seed);
     }
@@ -153,6 +160,7 @@ public class WorldScene extends Node {
      */
     public void cleanup() {
         if (!initialized) return;
+        LOG.debug("Cleaning up world systems");
         initialized = false;
         water.cleanup();
         terrain.cleanup();
@@ -161,6 +169,7 @@ public class WorldScene extends Node {
         lighting.cleanup();
         wind = null;
         removeFromParent();
+        LOG.info("World systems cleaned up");
     }
 
     private void ensureInitialized() {

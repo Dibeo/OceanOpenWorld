@@ -8,6 +8,8 @@ import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Immutable, validated runtime settings loaded from the external {@code config.xml} document.
@@ -16,6 +18,8 @@ import org.w3c.dom.Element;
  * are documented in the root {@code config.xml}.
  */
 public final class GameConfig {
+    private static final Logger LOG = LogManager.getLogger(GameConfig.class);
+
     /** Seed used to derive procedural world content. */
     public final long seed;
     /** Chunk width and depth in world units. */
@@ -172,8 +176,10 @@ public final class GameConfig {
     public static GameConfig load(String filename) {
         Path path = Paths.get(filename).toAbsolutePath().normalize();
         if (!Files.isRegularFile(path)) {
+            LOG.error("Configuration file not found: {}", path);
             throw new IllegalStateException("Configuration file not found: " + path);
         }
+        LOG.debug("Loading configuration from {}", path);
         try (InputStream in = Files.newInputStream(path)) {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
@@ -188,8 +194,12 @@ public final class GameConfig {
             if (!"gameConfig".equals(document.getDocumentElement().getTagName())) {
                 throw new IllegalArgumentException("Expected XML root: gameConfig");
             }
-            return new GameConfig(document.getDocumentElement());
+            GameConfig config = new GameConfig(document.getDocumentElement());
+            LOG.debug("Loaded configuration: seed={}, chunkSize={}, renderDistance={}, cloudsEnabled={}",
+                    config.seed, config.chunkSize, config.renderDistance, config.cloudsEnabled);
+            return config;
         } catch (Exception e) {
+            LOG.error("Unable to load configuration from {}", path, e);
             throw new IllegalStateException("Unable to read " + path + ": " + e.getMessage(), e);
         }
     }

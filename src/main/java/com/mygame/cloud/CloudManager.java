@@ -23,8 +23,8 @@ import com.mygame.sky.SkyManager;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Renders a deterministic volumetric cloud layer and updates its motion and lighting.
@@ -36,7 +36,7 @@ import java.util.logging.Logger;
  * of the sun, and water-reflection cameras see the same cloud layer.
  */
 public final class CloudManager {
-    private static final Logger LOG = Logger.getLogger(CloudManager.class.getName());
+    private static final Logger LOG = LogManager.getLogger(CloudManager.class);
 
     // Appearance parameters that do not need to be exposed in config.xml.
     private static final float EROSION = 0.6f;
@@ -88,8 +88,14 @@ public final class CloudManager {
      * @param seed world seed
      */
     public void initialize(long seed) {
-        if (initialized || !config.cloudsEnabled) return;
+        if (initialized) return;
+        if (!config.cloudsEnabled) {
+            LOG.debug("Cloud rendering is disabled");
+            return;
+        }
 
+        LOG.debug("Initializing clouds for seed {} with {}x{} noise texture",
+                seed, config.cloudTextureSize, config.cloudTextureSize);
         Sphere dome = new Sphere(12, 24, sky.getSkyRadius());
         dome.clearBuffer(VertexBuffer.Type.Normal);
         dome.clearBuffer(VertexBuffer.Type.TexCoord);
@@ -121,6 +127,7 @@ public final class CloudManager {
         // Generate the first texture synchronously so clouds are visible in the first frame.
         applyTexture(CloudNoiseGenerator.generate(seed, config.cloudTextureSize));
         update(0f);
+        LOG.info("Cloud rendering initialized");
     }
 
     /**
@@ -130,6 +137,7 @@ public final class CloudManager {
      */
     public void regenerate(long seed) {
         if (!initialized) return;
+        LOG.info("Regenerating cloud texture with seed {}", seed);
         applySeed(seed);
         int size = config.cloudTextureSize;
         // A newer regeneration supersedes the previous pending result.
@@ -149,9 +157,10 @@ public final class CloudManager {
             CompletableFuture<byte[]> done = pendingTexture;
             pendingTexture = null;
             if (done.isCompletedExceptionally()) {
-                LOG.log(Level.WARNING, "Cloud generation failed", done.exceptionNow());
+                LOG.error("Cloud generation failed", done.exceptionNow());
             } else {
                 applyTexture(done.resultNow());
+                LOG.debug("Cloud texture generation completed");
             }
         }
 
@@ -171,6 +180,7 @@ public final class CloudManager {
 
     /** Detaches the cloud node and abandons any pending texture result. */
     public void cleanup() {
+        LOG.debug("Cleaning up cloud rendering");
         pendingTexture = null;
         cloudNode.removeFromParent();
         initialized = false;

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gameConfig>
+    <world seed="42"/>
+    <terrain chunkSize="4" subdivisions="2" renderDistance="0" maxChunksPerFrame="1"/>
+    <camera speed="1" farPlane="100"/>
+    <graphics width="640" height="480" vsync="false" gammaCorrection="false" fpsLimit="60"/>
+    <water height="1000" transparency="0" waveSpeed="0" waveScale="0" maxAmplitude="0"
+           windChangeSpeed="0.1" windStrengthVariation="0" reflectionMapSize="16"/>
+    <lighting sunIntensity="1"/>
+    <grass density="1" distance="10" flowers="0"/>
+    <rocks density="0" sizeScale="1"/>
+    <clouds enabled="false" altitude="100" thickness="10" coverage="0" density="0.01"
+            windSpeed="0" tileMeters="10" textureSize="256" steps="8" lightSteps="1"/>
+</gameConfig>

@@ -11,12 +11,16 @@ import com.jme3.texture.Texture2D;
 import com.mygame.config.GameConfig;
 import com.mygame.texture.TextureLibrary;
 import com.mygame.water.WindModel;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Terrain facade used by Main.java and other modules to coordinate procedural materials,
  * chunk streaming, wind-driven grass, and world reseeding.
  */
 public final class TerrainManager {
+    private static final Logger LOG = LogManager.getLogger(TerrainManager.class);
+
     /** Texture-layer names defined in textures.xml. */
     private static final String GRASS = "grass";
     private static final String SAND = "sand";
@@ -65,6 +69,8 @@ public final class TerrainManager {
      * @param seed world seed
      */
     public void initialize(long seed) {
+        LOG.debug("Initializing terrain for seed {} (chunk size {}, render distance {})",
+                seed, config.chunkSize, config.renderDistance);
         this.seed = seed;
         generator = new TerrainGenerator(seed);
 
@@ -80,6 +86,7 @@ public final class TerrainManager {
         if (terrainNode.getParent() == null) rootNode.attachChild(terrainNode);
         loader = new ChunkLoader(terrainNode, camera, terrainMaterial, grassMaterial, rockMaterial, generator, config);
         loader.update();
+        LOG.info("Terrain initialized for seed {}", seed);
     }
 
     private Material createGrassMaterial() {
@@ -209,6 +216,7 @@ public final class TerrainManager {
      * @param newSeed new world seed
      */
     public void regenerate(long newSeed) {
+        LOG.info("Regenerating terrain with seed {}", newSeed);
         seed = newSeed;
         generator = new TerrainGenerator(newSeed);
         textures.setSeed(newSeed);   // regenerate textures for the new seed
@@ -219,9 +227,11 @@ public final class TerrainManager {
 
     /** Stops chunk workers and removes terrain geometry from its parent node. */
     public void cleanup() {
+        LOG.debug("Cleaning up terrain");
         if (loader != null) loader.shutdown();
         terrainNode.detachAllChildren();
         loader = null;
         terrainNode.removeFromParent();
+        LOG.debug("Terrain cleanup complete");
     }
 }

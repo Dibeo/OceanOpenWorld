@@ -16,12 +16,16 @@ import com.jme3.scene.shape.Sphere;
 import com.mygame.lighting.LightingManager;
 
 import java.nio.FloatBuffer;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Creates and updates the sky gradient and visible sun using the shared lighting direction.
  * The manager does not maintain a separate sun direction.
  */
 public final class SkyManager {
+    private static final Logger LOG = LogManager.getLogger(SkyManager.class);
+
     private static final float MAX_SKY_RADIUS = 450f;
     private static final float SUN_RADIUS = 14f;
     private static final ColorRGBA HORIZON = new ColorRGBA(0.72f, 0.85f, 0.96f, 1f);
@@ -57,6 +61,7 @@ public final class SkyManager {
     public void initialize() {
         if (initialized) return;
 
+        LOG.debug("Initializing sky");
         // Keep the dome inside the far plane so the camera frustum does not clip it.
         skyRadius = Math.min(MAX_SKY_RADIUS, camera.getFrustumFar() * 0.9f);
         sunDistance = skyRadius * 0.78f;
@@ -98,6 +103,7 @@ public final class SkyManager {
         scene.attachChild(skyNode);
         initialized = true;
         update(0f);
+        LOG.debug("Sky initialized with radius {}", skyRadius);
     }
 
     private void addGradient(Mesh mesh) {
@@ -146,6 +152,7 @@ public final class SkyManager {
 
     /** Detaches the sky node and resets the initialized state. */
     public void cleanup() {
+        LOG.debug("Cleaning up sky");
         skyNode.removeFromParent();
         initialized = false;
     }

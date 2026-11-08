@@ -5,9 +5,13 @@ import com.jme3.light.DirectionalLight;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Node;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /** Owns the scene's directional sun and ambient light and provides shared sun state. */
 public final class LightingManager {
+    private static final Logger LOG = LogManager.getLogger(LightingManager.class);
+
     private final Node scene;
     private final ColorRGBA baseSunColor = new ColorRGBA(1f, 0.95f, 0.82f, 1f);
     private DirectionalLight sun;
@@ -31,6 +35,7 @@ public final class LightingManager {
     public void initialize(float intensity) {
         if (sun != null) return;
 
+        LOG.debug("Initializing lighting with sun intensity {}", intensity);
         sun = new DirectionalLight();
         sun.setDirection(new Vector3f(-0.3f, -0.8f, -0.5f).normalizeLocal());
         scene.addLight(sun);
@@ -41,6 +46,7 @@ public final class LightingManager {
         // ambient multiplied by yellow sand would produce gray-blue shadows.
         ambient.setColor(new ColorRGBA(0.42f, 0.40f, 0.36f, 1f));
         scene.addLight(ambient);
+        LOG.debug("Lighting initialized");
     }
 
     /**
@@ -57,6 +63,7 @@ public final class LightingManager {
         }
         sun.setDirection(direction.normalize()); // does not modify the supplied vector
         sunVersion++;
+        LOG.debug("Sun direction changed to {}", sun.getDirection());
     }
 
     /**
@@ -72,6 +79,7 @@ public final class LightingManager {
             throw new IllegalArgumentException("Invalid solar intensity.");
         }
         sun.setColor(baseSunColor.mult(intensity));
+        LOG.debug("Sun intensity changed to {}", intensity);
     }
 
     /**
@@ -117,6 +125,7 @@ public final class LightingManager {
 
     /** Removes the managed lights from the scene; safe to call more than once. */
     public void cleanup() {
+        LOG.debug("Cleaning up lighting");
         if (sun != null) { scene.removeLight(sun); sun = null; }
         if (ambient != null) { scene.removeLight(ambient); ambient = null; }
     }

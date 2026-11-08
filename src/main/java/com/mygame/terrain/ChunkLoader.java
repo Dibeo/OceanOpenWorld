@@ -22,8 +22,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Streams terrain chunks around the camera, generating mesh data asynchronously and installing
@@ -35,7 +35,7 @@ import java.util.logging.Logger;
  * deterministically when it returns.
  */
 public final class ChunkLoader {
-    private static final Logger LOG = Logger.getLogger(ChunkLoader.class.getName());
+    private static final Logger LOG = LogManager.getLogger(ChunkLoader.class);
 
     private record Result(long key, int generation, TerrainChunk.Data data) {
     }
@@ -105,6 +105,8 @@ public final class ChunkLoader {
             t.setDaemon(true);
             return t;
         });
+        LOG.debug("Created chunk workers: threads={}, max in flight={}, grass radius={}",
+                threads, maxInFlight, grassRadius);
     }
 
     private static long pack(int x, int z) { return ((long) x << 32) | (z & 0xFFFFFFFFL); }
@@ -140,6 +142,8 @@ public final class ChunkLoader {
             trimGrass(cx, cz);
             rebuildRequestQueue(cx, cz);
             grassDirty = true;
+            LOG.debug("Updated chunk requests around ({}, {}): {} chunks pending, {} loaded",
+                    cx, cz, requestQueue.size(), loaded.size());
         }
         if (grassDirty) {
             grassDirty = false;
@@ -157,7 +161,7 @@ public final class ChunkLoader {
             pending.remove(r.key);
             if (r.data == null) continue;
             int x = unpackX(r.key), z = unpackZ(r.key);
-            if (inRange(x, z, cx, cz)) continue;     // the camera moved away before this result was ready
+            if (!inRange(x, z, cx, cz)) continue;    // the camera moved away before this result was ready
             TerrainChunk chunk = new TerrainChunk(x, z, r.data, material, rockMaterial, sharedIndices,
                     config.chunkSize);
             loaded.put(r.key, chunk);
@@ -172,7 +176,7 @@ public final class ChunkLoader {
         Iterator<Map.Entry<Long, TerrainChunk>> it = loaded.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<Long, TerrainChunk> e = it.next();
-            if (inRange(unpackX(e.getKey()), unpackZ(e.getKey()), cx, cz)) {
+            if (!inRange(unpackX(e.getKey()), unpackZ(e.getKey()), cx, cz)) {
                 e.getValue().getGeometry().removeFromParent();
                 if (e.getValue().getRockGeometry() != null) e.getValue().getRockGeometry().removeFromParent();
                 e.getValue().clearGrass();
@@ -244,7 +248,7 @@ public final class ChunkLoader {
                     data = TerrainChunk.generateGrass(x, z, terrainGenerator, heights, heightSide,
                             size, sub, waterH, density, flowers);
                 } catch (Throwable t) {
-                    LOG.log(Level.SEVERE, "Failed to generate grass " + x + "," + z, t);
+                    LOG.error("Failed to generate grass at chunk ({}, {})", x, z, t);
                 }
                 grassReady.add(new GrassResult(key, gen, data));
             });
@@ -282,7 +286,7 @@ public final class ChunkLoader {
                 try {
                     data = TerrainChunk.generate(x, z, gen3d, size, sub, waterH, rockDensity, rockScale);
                 } catch (Throwable t) {
-                    LOG.log(Level.SEVERE, "Failed to generate chunk " + x + "," + z, t);
+                    LOG.error("Failed to generate chunk ({}, {})", x, z, t);
                 }
                 ready.add(new Result(key, gen, data));
             });
@@ -295,6 +299,7 @@ public final class ChunkLoader {
      * @param newGenerator generator to use for future chunk data
      */
     public void regenerate(TerrainGenerator newGenerator) {
+        LOG.debug("Invalidating chunk generation {} and restarting with new seed", generation);
         generation++; // invalidate all in-progress work
         ready.clear();
         pending.clear();
@@ -311,6 +316,7 @@ public final class ChunkLoader {
 
     /** Stops background workers and clears completed results. */
     public void shutdown() {
+        LOG.debug("Stopping chunk workers; loaded={}, pending={}", loaded.size(), pending.size());
         executor.shutdownNow();
         ready.clear();
         grassReady.clear();
