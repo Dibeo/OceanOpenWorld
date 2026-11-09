@@ -27,8 +27,8 @@ import java.util.Random;
 
 /**
  * Renderable terrain chunk assembled from worker-generated mesh data. {@link #generate}
- * performs the pure height, normal, tangent, UV, color, and blend-map calculations in direct
- * buffers on a worker thread; the constructor creates engine meshes and geometry on the render thread.
+ * creates terrain, rock, and tree mesh data on worker threads; the constructor creates engine
+ * meshes and geometry on the render thread. Grass is generated on demand as the camera approaches.
  *
  * <p>Call {@link #generate(int, int, TerrainGenerator, int, int, float, float, float)} on a
  * worker thread, then construct the chunk and attach its geometries on the render thread.
@@ -44,15 +44,18 @@ public final class TerrainChunk {
         final float[] heights;
         final int heightSide;
         final RockShape.RockData rocks;
+        final TreeShape.Meshes trees;
+        final int treeLod;
 
         Data(FloatBuffer positions, FloatBuffer normals, FloatBuffer tangents, FloatBuffer uvs,
              ByteBuffer blendMap, ByteBuffer blendMap1, int blendMapSize, float minY, float maxY,
-             float[] heights, int heightSide, RockShape.RockData rocks) {
+             float[] heights, int heightSide, RockShape.RockData rocks, TreeShape.Meshes trees, int treeLod) {
             this.positions = positions; this.normals = normals; this.tangents = tangents;
             this.uvs = uvs;
             this.blendMap = blendMap; this.blendMap1 = blendMap1; this.blendMapSize = blendMapSize;
             this.minY = minY; this.maxY = maxY;
             this.heights = heights; this.heightSide = heightSide; this.rocks = rocks;
+            this.trees = trees; this.treeLod = treeLod;
         }
     }
 
@@ -83,6 +86,9 @@ public final class TerrainChunk {
     private final Geometry geometry;
     private Geometry grassGeometry;
     private final Geometry rockGeometry;
+    private final Material barkMaterial, leavesMaterial;
+    private Geometry barkGeometry, leavesGeometry;
+    private int treeLod;
     private boolean grassBuilt;
 
     /**
@@ -98,9 +104,30 @@ public final class TerrainChunk {
      */
     public TerrainChunk(int chunkX, int chunkZ, Data data, Material material, Material rockMaterial,
                         VertexBuffer sharedIndices, int size) {
+        this(chunkX, chunkZ, data, material, rockMaterial, null, null, sharedIndices, size);
+    }
+
+    /**
+     * Builds terrain, rock, and tree geometry for one chunk.
+     *
+     * @param chunkX horizontal chunk coordinate on the world X axis
+     * @param chunkZ horizontal chunk coordinate on the world Z axis
+     * @param data generated mesh and surface data
+     * @param material terrain material to clone for the chunk
+     * @param rockMaterial material used for generated rocks
+     * @param barkMaterial material used for tree trunks and branches
+     * @param leavesMaterial material used for foliage cards
+     * @param sharedIndices index buffer shared by terrain chunks of this resolution
+     * @param size chunk width and depth in world units
+     */
+    public TerrainChunk(int chunkX, int chunkZ, Data data, Material material, Material rockMaterial,
+                        Material barkMaterial, Material leavesMaterial, VertexBuffer sharedIndices, int size) {
         this.chunkX = chunkX;
         this.chunkZ = chunkZ;
         this.size = size;
+        this.barkMaterial = barkMaterial;
+        this.leavesMaterial = leavesMaterial;
+        this.treeLod = data.treeLod;
         // Retain these few kilobytes so grass can be generated on demand as the camera approaches.
         this.heights = data.heights;
         this.heightSide = data.heightSide;
@@ -128,6 +155,7 @@ public final class TerrainChunk {
 
         rockGeometry = (data.rocks == null || data.rocks.indexCount == 0) ? null
                 : createRockGeometry(chunkX, chunkZ, data.rocks, rockMaterial, size);
+        setTreeGeometry(data.trees, data.treeLod);
     }
 
     private static Geometry createRockGeometry(int chunkX, int chunkZ, RockShape.RockData data,
@@ -148,6 +176,76 @@ public final class TerrainChunk {
         rocks.setShadowMode(RenderQueue.ShadowMode.CastAndReceive);
         rocks.setLocalTranslation((float) ((double) chunkX * size), 0f, (float) ((double) chunkZ * size));
         return rocks;
+    }
+
+    private void setTreeGeometry(TreeShape.Meshes data, int lod) {
+        if (barkGeometry != null) barkGeometry.removeFromParent();
+        if (leavesGeometry != null) leavesGeometry.removeFromParent();
+        barkGeometry = null;
+        leavesGeometry = null;
+        treeLod = lod;
+        if (data == null || (data.bark() == null && data.leaves() == null)) return;
+        if (barkMaterial == null || leavesMaterial == null) {
+            throw new IllegalStateException("Tree geometry requires bark and foliage materials");
+        }
+        if (data.bark() != null) {
+            barkGeometry = createTreeGeometry(chunkX, chunkZ, data.bark(), barkMaterial, false, size);
+        }
+        if (data.leaves() != null) {
+            leavesGeometry = createTreeGeometry(chunkX, chunkZ, data.leaves(), leavesMaterial, true, size);
+        }
+    }
+
+    private static Geometry createTreeGeometry(int chunkX, int chunkZ, TreeShape.TreeMesh data,
+                                               Material material, boolean foliage, int size) {
+        Mesh mesh = new Mesh();
+        mesh.setBuffer(vertexBuffer(Type.Position, 3, Format.Float, data.positions()));
+        mesh.setBuffer(vertexBuffer(Type.Normal, 3, Format.Float, data.normals()));
+        mesh.setBuffer(vertexBuffer(Type.Color, 4, Format.Float, data.colors()));
+        mesh.setBuffer(vertexBuffer(Type.TexCoord, 2, Format.Float, data.uvs()));
+        if (foliage) {
+            mesh.setBuffer(vertexBuffer(Type.TexCoord2, 2, Format.Float, data.params()));
+        }
+        mesh.setBuffer(data.shortIndices() != null
+                ? vertexBuffer(Type.Index, 3, Format.UnsignedShort, data.shortIndices())
+                : vertexBuffer(Type.Index, 3, Format.UnsignedInt, data.indices()));
+        Vector3f min = new Vector3f(data.minX(), data.minY(), data.minZ());
+        Vector3f max = new Vector3f(data.maxX(), data.maxY(), data.maxZ());
+        mesh.setBound(new BoundingBox(min.add(max).multLocal(0.5f),
+                (max.x - min.x) * 0.5f + 0.5f,
+                (max.y - min.y) * 0.5f + 0.5f,
+                (max.z - min.z) * 0.5f + 0.5f));
+        mesh.updateCounts();
+        Geometry geometry = new Geometry((foliage ? "Leaves_" : "Bark_") + chunkX + "_" + chunkZ, mesh);
+        geometry.setMaterial(material);
+        geometry.setShadowMode(RenderQueue.ShadowMode.CastAndReceive);
+        geometry.setLocalTranslation((float) ((double) chunkX * size), 0f, (float) ((double) chunkZ * size));
+        return geometry;
+    }
+
+    /** Replaces this chunk's tree geometry after a detail-level rebuild. */
+    void updateTrees(TreeShape.Meshes data, int lod) {
+        setTreeGeometry(data, lod);
+    }
+
+    /** Removes the current tree geometries when the chunk is unloaded. */
+    void clearTrees() {
+        if (barkGeometry != null) barkGeometry.removeFromParent();
+        if (leavesGeometry != null) leavesGeometry.removeFromParent();
+        barkGeometry = null;
+        leavesGeometry = null;
+    }
+
+    Geometry getBarkGeometry() {
+        return barkGeometry;
+    }
+
+    Geometry getLeavesGeometry() {
+        return leavesGeometry;
+    }
+
+    int getTreeLod() {
+        return treeLod;
     }
 
     /**
@@ -270,6 +368,28 @@ public final class TerrainChunk {
     public static Data generate(int chunkX, int chunkZ, TerrainGenerator generator,
                                 int size, int subdivisions, float waterHeight,
                                 float rockDensity, float rockSizeScale) {
+        return generate(chunkX, chunkZ, generator, size, subdivisions, waterHeight,
+                rockDensity, rockSizeScale, 0f, TreeShape.LOD_LOW);
+    }
+
+    /**
+     * Computes chunk vertex data, blend maps, rocks, and trees without creating scene objects.
+     *
+     * @param chunkX horizontal chunk coordinate on the world X axis
+     * @param chunkZ horizontal chunk coordinate on the world Z axis
+     * @param generator seeded world terrain generator
+     * @param size chunk width and depth in world units
+     * @param subdivisions grid-cell count along each chunk edge
+     * @param waterHeight world-space water-plane height used for surface blending
+     * @param rockDensity requested density of main rocks in rocky areas
+     * @param rockSizeScale rock size multiplier
+     * @param treeDensity tree placement fraction in [0, 1]
+     * @param treeLod detail level used to build the chunk's trees
+     * @return generated buffers and height samples
+     */
+    public static Data generate(int chunkX, int chunkZ, TerrainGenerator generator,
+                                int size, int subdivisions, float waterHeight,
+                                float rockDensity, float rockSizeScale, float treeDensity, int treeLod) {
         final int side = subdivisions + 1;
         final int hs = side + 2;
         final float step = (float) size / subdivisions;
@@ -343,10 +463,77 @@ public final class TerrainChunk {
         blendMap1.flip();
         RockShape.RockData rocks = generateRocks(chunkX, chunkZ, generator, heights, hs, size, subdivisions,
                 waterHeight, rockDensity, rockSizeScale);
-        return new Data(positions, normals, tangents, uvs, blendMap, blendMap1, side, minY, maxY, heights, hs, rocks);
+        TreeShape.Meshes trees = generateTrees(chunkX, chunkZ, generator, heights, hs, size, subdivisions,
+                waterHeight, treeDensity, treeLod);
+        return new Data(positions, normals, tangents, uvs, blendMap, blendMap1, side, minY, maxY,
+                heights, hs, rocks, trees, treeLod);
     }
 
     private static final float ROCK_CELL = 8f;
+    private static final float TREE_CELL = 8f;
+
+    /**
+     * Builds deterministic trees from the world seed, chunk coordinates, terrain, and forest field.
+     * Each candidate occupies one fixed grid cell, making regeneration independent of chunk load
+     * order.
+     *
+     * @param chunkX horizontal chunk coordinate on the world X axis
+     * @param chunkZ horizontal chunk coordinate on the world Z axis
+     * @param generator seeded world terrain generator
+     * @param heights sampled chunk terrain heights
+     * @param heightSide number of height samples per row
+     * @param size chunk width and depth in world units
+     * @param subdivisions terrain grid-cell count along each chunk edge
+     * @param waterHeight water-plane height
+     * @param density tree placement fraction in [0, 1]
+     * @param lod tree detail level
+     * @return built tree meshes, or {@code null} if tree placement is disabled or no candidates pass
+     */
+    static TreeShape.Meshes generateTrees(int chunkX, int chunkZ, TerrainGenerator generator,
+                                          float[] heights, int heightSide, int size, int subdivisions,
+                                          float waterHeight, float density, int lod) {
+        if (density <= 0f) return null;
+        if (density > 1f || !Float.isFinite(density)) {
+            throw new IllegalArgumentException("Tree density must be finite and in [0, 1]");
+        }
+        if (lod != TreeShape.LOD_LOW && lod != TreeShape.LOD_HIGH) {
+            throw new IllegalArgumentException("Unsupported tree detail level: " + lod);
+        }
+        float terrainStep = (float) size / subdivisions;
+        double originX = (double) chunkX * size, originZ = (double) chunkZ * size;
+        Random random = new Random(generator.getTreeChunkSeed(chunkX, chunkZ));
+        TreeShape.Buffers out = new TreeShape.Buffers();
+        int cells = (int) Math.ceil(size / TREE_CELL);
+        for (int cz = 0; cz < cells; cz++) {
+            for (int cx = 0; cx < cells; cx++) {
+                float localX = (cx + random.nextFloat()) * TREE_CELL;
+                float localZ = (cz + random.nextFloat()) * TREE_CELL;
+                float acceptance = random.nextFloat();
+                float speciesPick = random.nextFloat();
+                float vigorJitter = random.nextFloat();
+                long treeSeed = random.nextLong();
+                if (localX >= size || localZ >= size) continue;
+
+                float y = sampleTerrainHeight(heights, heightSide, subdivisions, terrainStep, localX, localZ);
+                if (y < waterHeight + 2f || grassWeight(y, waterHeight) <= 0f) continue;
+                double worldX = originX + localX, worldZ = originZ + localZ;
+                float placement = density * grassWeight(y, waterHeight) * generator.getTreeField(worldX, worldZ);
+                if (acceptance >= placement) continue;
+
+                TreeShape.Species species = speciesPick < 0.58f ? TreeShape.Species.OAK
+                        : speciesPick < 0.82f ? TreeShape.Species.PINE : TreeShape.Species.BIRCH;
+                float vigor = Math.max(0f, Math.min(1f, generator.getTreeVigor(worldX, worldZ)
+                        + (vigorJitter - 0.5f) * 0.12f));
+                float tone = generator.getTreeTone(worldX, worldZ);
+                TreeShape.add(out, generator.getTreeShapeNoise(), treeSeed, localX, y, localZ,
+                        species, vigor, tone, lod);
+                if (species == TreeShape.Species.PINE) {
+                    TreeShape.addFern(out, treeSeed ^ 0x9E3779B97F4A7C15L, localX, y, localZ, lod);
+                }
+            }
+        }
+        return out.isEmpty() ? null : out.build();
+    }
 
     /**
      * Generates deterministic chunk rocks from the world seed and chunk coordinates. Each rock

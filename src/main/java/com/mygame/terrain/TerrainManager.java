@@ -16,7 +16,7 @@ import org.apache.logging.log4j.Logger;
 
 /**
  * Terrain facade used by Main.java and other modules to coordinate procedural materials,
- * chunk streaming, wind-driven grass, and world reseeding.
+ * chunk streaming, wind-driven vegetation, and world reseeding.
  */
 public final class TerrainManager {
     private static final Logger LOG = LogManager.getLogger(TerrainManager.class);
@@ -42,6 +42,8 @@ public final class TerrainManager {
     private Material terrainMaterial;
     private Material grassMaterial;
     private Material rockMaterial;
+    private Material barkMaterial;
+    private Material leavesMaterial;
     private long seed;
     private float elapsedTime;
 
@@ -82,11 +84,15 @@ public final class TerrainManager {
         applyTextures();
         grassMaterial = createGrassMaterial();
         rockMaterial = createRockMaterial(seed);
+        barkMaterial = createBarkMaterial(seed);
+        leavesMaterial = createLeavesMaterial();
 
         if (terrainNode.getParent() == null) rootNode.attachChild(terrainNode);
-        loader = new ChunkLoader(terrainNode, camera, terrainMaterial, grassMaterial, rockMaterial, generator, config);
+        loader = new ChunkLoader(terrainNode, camera, terrainMaterial, grassMaterial, rockMaterial,
+                barkMaterial, leavesMaterial, generator, config);
         loader.update();
-        LOG.info("Terrain initialized for seed {}", seed);
+        LOG.info("Terrain initialized for seed {} (tree density {}, high-detail distance {} m)",
+                seed, config.treeDensity, config.treeDetailDistance);
     }
 
     private Material createGrassMaterial() {
@@ -118,6 +124,30 @@ public final class TerrainManager {
         return material;
     }
 
+    private Material createBarkMaterial(long seed) {
+        Material material = new Material(assets, "MatDefs/Bark/Bark.j3md");
+        material.setTexture("NoiseMap", BarkTexture.create(seed));
+        material.setColor("AmbientColor", new ColorRGBA(0.38f, 0.39f, 0.36f, 1f));
+        material.setColor("SunColor", new ColorRGBA(0.85f, 0.82f, 0.68f, 1f));
+        material.setVector3("SunDirection", new Vector3f(-0.3f, -0.8f, -0.5f).normalizeLocal());
+        material.setFloat("BumpStrength", 0.9f);
+        return material;
+    }
+
+    private Material createLeavesMaterial() {
+        Material material = new Material(assets, "MatDefs/Leaves/Leaves.j3md");
+        material.setTexture("ColorMap", LeafTexture.create());
+        material.setFloat("AlphaDiscardThreshold", 0.5f);
+        material.setColor("AmbientColor", new ColorRGBA(0.38f, 0.39f, 0.32f, 1f));
+        material.setColor("SunColor", new ColorRGBA(0.85f, 0.82f, 0.68f, 1f));
+        material.setVector3("SunDirection", new Vector3f(-0.3f, -0.8f, -0.5f).normalizeLocal());
+        Vector2f direction = wind.getDirection();
+        material.setVector2("WindDirection", direction);
+        material.setFloat("WindStrength", wind.getStrength());
+        material.setFloat("Time", 0f);
+        return material;
+    }
+
     private Material createMaterial() {
         Material material = new Material(assets, "Common/MatDefs/Terrain/TerrainLighting.j3md");
         material.setBoolean("useTriPlanarMapping", false);
@@ -144,7 +174,7 @@ public final class TerrainManager {
     }
 
     /**
-     * Updates chunk streaming, grass animation time, and current wind uniforms.
+     * Updates chunk streaming, vegetation animation time, and current wind uniforms.
      *
      * @param tpf elapsed frame time in seconds
      */
@@ -161,26 +191,35 @@ public final class TerrainManager {
         Vector2f direction = wind.getDirection();
         grassMaterial.setVector2("WindDirection", direction);
         grassMaterial.setFloat("WindStrength", wind.getStrength());
+        if (leavesMaterial != null) {
+            leavesMaterial.setVector2("WindDirection", direction);
+            leavesMaterial.setFloat("WindStrength", wind.getStrength());
+            leavesMaterial.setFloat("Time", elapsedTime);
+        }
     }
 
     /**
-     * Updates the sun-ray direction used by terrain vegetation and rock materials.
+     * Updates the sun-ray direction used by terrain vegetation, tree, and rock materials.
      *
      * @param direction direction in which sun rays travel
      */
     public void setSunDirection(Vector3f direction) {
         if (grassMaterial != null) grassMaterial.setVector3("SunDirection", direction);
         if (rockMaterial != null) rockMaterial.setVector3("SunDirection", direction);
+        if (barkMaterial != null) barkMaterial.setVector3("SunDirection", direction);
+        if (leavesMaterial != null) leavesMaterial.setVector3("SunDirection", direction);
     }
 
     /**
-     * Updates the sun color used by terrain vegetation and rock materials.
+     * Updates the sun color used by terrain vegetation, tree, and rock materials.
      *
      * @param color emitted sun color
      */
     public void setSunColor(ColorRGBA color) {
         if (grassMaterial != null) grassMaterial.setColor("SunColor", color);
         if (rockMaterial != null) rockMaterial.setColor("SunColor", color);
+        if (barkMaterial != null) barkMaterial.setColor("SunColor", color);
+        if (leavesMaterial != null) leavesMaterial.setColor("SunColor", color);
     }
 
     /**
@@ -221,6 +260,7 @@ public final class TerrainManager {
         generator = new TerrainGenerator(newSeed);
         textures.setSeed(newSeed);   // regenerate textures for the new seed
         rockMaterial.setTexture("NoiseMap", RockTexture.create(newSeed));
+        barkMaterial.setTexture("NoiseMap", BarkTexture.create(newSeed));
         applyTextures();
         loader.regenerate(generator);
     }

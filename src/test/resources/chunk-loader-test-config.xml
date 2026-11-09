@@ -9,6 +9,7 @@
     <lighting sunIntensity="1"/>
     <grass density="1" distance="10" flowers="0"/>
     <rocks density="0" sizeScale="1"/>
+    <trees density="0" detailDistance="30"/>
     <clouds enabled="false" altitude="100" thickness="10" coverage="0" density="0.01"
             windSpeed="0" tileMeters="10" textureSize="256" steps="8" lightSteps="1"/>
 </gameConfig>

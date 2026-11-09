@@ -25,7 +25,7 @@ final class ChunkLoaderTest {
         camera.setLocation(Vector3f.ZERO);
         Node terrainNode = new Node("test-terrain");
         Material terrainMaterial = new Material(assets, "Common/MatDefs/Terrain/TerrainLighting.j3md");
-        ChunkLoader loader = new ChunkLoader(terrainNode, camera, terrainMaterial, null, null,
+        ChunkLoader loader = new ChunkLoader(terrainNode, camera, terrainMaterial, null, null, null, null,
                 new TerrainGenerator(config.seed), config);
 
         try {

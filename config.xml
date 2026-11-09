@@ -3,7 +3,7 @@
 
     <!--
       The required document root is <gameConfig>. Runtime settings are loaded by
-      GameConfig.load("config.xml"). All nine section elements and
+      GameConfig.load("config.xml"). All ten section elements and
       every listed attribute are required; this file format has no attribute defaults. Exactly
       one element with each required section name must occur in the document (the loader searches
       descendants, not just direct children). Numeric
@@ -47,6 +47,10 @@
       rocks:
         density               Required finite density in [0, 50] main rocks per 1000 square metres.
         sizeScale             Required finite size multiplier in [0.2, 4].
+      trees:
+        density               Required finite placement fraction in [0, 1] applied to 8 m candidates
+                              on grassy terrain; 0 disables tree placement.
+        detailDistance        Required finite high-detail radius in [30, 400] world units.
       clouds:
         enabled               Required boolean.
         altitude              Required finite positive cloud-base altitude in world units.
@@ -105,6 +109,11 @@
     <rocks
         density="4.0"
         sizeScale="1.0"
+    />
+
+    <trees
+        density="0.15"
+        detailDistance="180.0"
     />
 
     <clouds

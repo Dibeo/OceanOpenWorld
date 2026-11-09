@@ -72,6 +72,10 @@ public final class GameConfig {
     public final float rockDensity;
     /** Rock size multiplier. */
     public final float rockSizeScale;
+    /** Tree placement fraction in [0, 1] applied to 8 m candidates on grassy terrain; 0 disables trees. */
+    public final float treeDensity;
+    /** Distance from the camera at which trees use high-detail geometry, in world units. */
+    public final float treeDetailDistance;
     /** Whether volumetric clouds are created. */
     public final boolean cloudsEnabled;
     /** Cloud base altitude in world units. */
@@ -103,6 +107,7 @@ public final class GameConfig {
         Element clouds = element(root, "clouds");
         Element grass = element(root, "grass");
         Element rocks = element(root, "rocks");
+        Element trees = element(root, "trees");
 
         seed = Long.parseLong(required(world, "seed"));
         chunkSize = positiveInt(terrain, "chunkSize");
@@ -133,6 +138,12 @@ public final class GameConfig {
         if (rockDensity > 50f) throw new IllegalArgumentException("rocks.density must be <= 50");
         if (rockSizeScale < 0.2f || rockSizeScale > 4f) {
             throw new IllegalArgumentException("rocks.sizeScale must be in [0.2, 4]");
+        }
+        treeDensity = nonnegativeFloat(trees, "density");
+        treeDetailDistance = positiveFloat(trees, "detailDistance");
+        if (treeDensity > 1f) throw new IllegalArgumentException("trees.density must be <= 1");
+        if (treeDetailDistance < 30f || treeDetailDistance > 400f) {
+            throw new IllegalArgumentException("trees.detailDistance must be in [30, 400]");
         }
         grassDensity = positiveFloat(grass, "density");
         grassDistance = positiveFloat(grass, "distance");

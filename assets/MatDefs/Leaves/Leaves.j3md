@@ -1,0 +1,55 @@
+MaterialDef Leaves {
+    MaterialParameters {
+        // Atlas 2x2 de feuillage (voir LeafTexture) ; nommé ColorMap pour la passe d'ombres
+        Texture2D ColorMap
+        Float AlphaDiscardThreshold : 0.5
+        Vector2 WindDirection
+        Float WindStrength
+        Float Time
+        Vector3 SunDirection
+        Color SunColor
+        Color AmbientColor
+    }
+
+    Technique {
+        VertexShader GLSL150:   Shaders/Leaves/Leaves.vert
+        FragmentShader GLSL150: Shaders/Leaves/Leaves.frag
+
+        WorldParameters {
+            WorldMatrix
+            WorldViewProjectionMatrix
+            CameraPosition
+        }
+
+        RenderState {
+            FaceCull Off
+        }
+    }
+
+    // Passe d'ombres du DirectionalLightShadowFilter : sans cette technique, la géométrie n'est PAS dessinée
+    // dans la carte d'ombre (elle ne projette donc aucune ombre).
+    Technique PreShadow {
+        VertexShader   GLSL310 GLSL300 GLSL150 GLSL100: Common/MatDefs/Shadow/PreShadow.vert
+        FragmentShader GLSL310 GLSL300 GLSL150 GLSL100: Common/MatDefs/Shadow/PreShadow.frag
+
+        WorldParameters {
+            WorldViewProjectionMatrix
+            WorldViewMatrix
+            ViewProjectionMatrix
+            ViewMatrix
+        }
+
+        Defines {
+            COLOR_MAP : ColorMap
+            DISCARD_ALPHA : AlphaDiscardThreshold
+        }
+
+        ForcedRenderState {
+            FaceCull Off
+            DepthTest On
+            DepthWrite On
+            PolyOffset 5 3
+            ColorWrite Off
+        }
+    }
+}

@@ -13,6 +13,7 @@ public final class TerrainGenerator {
     private final long seed;
     private final PerlinNoise continental, islands, details, dunes, warp, tint;
     private final PerlinNoise grass, deep, rockField, rockShape, flowerField, flowerHue;
+    private final PerlinNoise treeField, treeTone, treeVigor, treeShape;
 
     /**
      * Creates all terrain noise fields from the supplied world seed.
@@ -33,6 +34,10 @@ public final class TerrainGenerator {
         rockShape = new PerlinNoise(seed + 9011L);
         flowerField = new PerlinNoise(seed + 10007L);
         flowerHue = new PerlinNoise(seed + 11003L);
+        treeField = new PerlinNoise(seed + 12007L);
+        treeTone = new PerlinNoise(seed + 13001L);
+        treeVigor = new PerlinNoise(seed + 14009L);
+        treeShape = new PerlinNoise(seed + 15013L);
     }
 
     /**
@@ -160,6 +165,46 @@ public final class TerrainGenerator {
         return (float) smoothstep(-.05, .45, rockField.fractal(x * .016, z * .016, 3, .5, 2));
     }
 
+    /**
+     * Samples the broad-scale forest coverage field at world coordinates.
+     *
+     * @param x world X coordinate
+     * @param z world Z coordinate
+     * @return tree-placement weight in [0, 1]
+     */
+    public float getTreeField(double x, double z) {
+        return (float) smoothstep(-.38, .38, treeField.fractal(x * .012, z * .012, 3, .5, 2));
+    }
+
+    /**
+     * Samples a world-consistent foliage color tone.
+     *
+     * @param x world X coordinate
+     * @param z world Z coordinate
+     * @return foliage tone in [0, 1]
+     */
+    public float getTreeTone(double x, double z) {
+        double value = treeTone.fractal(x * .006, z * .006, 3, .5, 2);
+        return (float) (.5 + .5 * Math.max(-1.0, Math.min(1.0, value * 2.2)));
+    }
+
+    /**
+     * Samples world-consistent tree vigor used to vary height within each species.
+     *
+     * @param x world X coordinate
+     * @param z world Z coordinate
+     * @return vigor in [0, 1]
+     */
+    public float getTreeVigor(double x, double z) {
+        double value = treeVigor.fractal(x * .018, z * .018, 2, .5, 2);
+        return (float) (.5 + .5 * Math.max(-1.0, Math.min(1.0, value * 2.0)));
+    }
+
+    /** Returns the shared seed-driven 3D noise used to bend tree trunks and branches. */
+    PerlinNoise getTreeShapeNoise() {
+        return treeShape;
+    }
+
     /** Returns the world-seeded 3D noise used to shape rocks. */
     PerlinNoise getRockShapeNoise() {
         return rockShape;
@@ -174,6 +219,13 @@ public final class TerrainGenerator {
 
     long getGrassChunkSeed(int chunkX, int chunkZ) {
         return grassSeed(chunkX, chunkZ);
+    }
+
+    long getTreeChunkSeed(int chunkX, int chunkZ) {
+        long value = seed ^ 0xA0761D6478BD642FL;
+        value = (value ^ chunkX) * 0xE7037ED1A0B428DBL;
+        value = (value ^ chunkZ) * 0x8EBC6AF09C88C6E3L;
+        return value ^ (value >>> 32);
     }
 
     private long grassSeed(int chunkX, int chunkZ) {

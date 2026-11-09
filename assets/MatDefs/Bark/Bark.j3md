@@ -1,0 +1,47 @@
+MaterialDef Bark {
+    MaterialParameters {
+        // R sillons, G ton, B marques (bouleau) ; UV : u = tour du tronc, v = longueur
+        Texture2D NoiseMap
+        Vector3 SunDirection
+        Color SunColor
+        Color AmbientColor
+        Float BumpStrength
+    }
+
+    Technique {
+        VertexShader GLSL150:   Shaders/Bark/Bark.vert
+        FragmentShader GLSL150: Shaders/Bark/Bark.frag
+
+        WorldParameters {
+            WorldMatrix
+            WorldViewProjectionMatrix
+            CameraPosition
+        }
+
+        RenderState {
+            FaceCull Back
+        }
+    }
+
+    // Passe d'ombres du DirectionalLightShadowFilter : sans cette technique, la géométrie n'est PAS dessinée
+    // dans la carte d'ombre (elle ne projette donc aucune ombre).
+    Technique PreShadow {
+        VertexShader   GLSL310 GLSL300 GLSL150 GLSL100: Common/MatDefs/Shadow/PreShadow.vert
+        FragmentShader GLSL310 GLSL300 GLSL150 GLSL100: Common/MatDefs/Shadow/PreShadow.frag
+
+        WorldParameters {
+            WorldViewProjectionMatrix
+            WorldViewMatrix
+            ViewProjectionMatrix
+            ViewMatrix
+        }
+
+        ForcedRenderState {
+            FaceCull Off
+            DepthTest On
+            DepthWrite On
+            PolyOffset 5 3
+            ColorWrite Off
+        }
+    }
+}

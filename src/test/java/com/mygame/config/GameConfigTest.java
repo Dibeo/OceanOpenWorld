@@ -42,6 +42,26 @@ final class GameConfigTest {
         assertThrows(IllegalStateException.class, () -> GameConfig.load(configFile.toString()));
     }
 
+    /** Verifies tree density cannot exceed its configured fraction range. */
+    @Test
+    void rejectsTreeDensityAboveOne() throws IOException {
+        Path configFile = writeConfig(0.6f);
+        String xml = Files.readString(configFile).replace("density=\"0.45\"", "density=\"1.01\"");
+        Files.writeString(configFile, xml);
+
+        assertThrows(IllegalStateException.class, () -> GameConfig.load(configFile.toString()));
+    }
+
+    /** Verifies tree detail distance stays within the documented practical range. */
+    @Test
+    void rejectsTreeDetailDistanceOutsideRange() throws IOException {
+        Path configFile = writeConfig(0.6f);
+        String xml = Files.readString(configFile).replace("detailDistance=\"180\"", "detailDistance=\"20\"");
+        Files.writeString(configFile, xml);
+
+        assertThrows(IllegalStateException.class, () -> GameConfig.load(configFile.toString()));
+    }
+
     /** Verifies that a missing configuration file produces an explicit loading failure. */
     @Test
     void rejectsMissingConfigurationFile() {
@@ -59,6 +79,8 @@ final class GameConfigTest {
         assertEquals(32, config.subdivisions);
         assertEquals(640, config.width);
         assertEquals(1f, config.waterHeight);
+        assertEquals(0.45f, config.treeDensity);
+        assertEquals(180f, config.treeDetailDistance);
     }
 
     private GameConfig loadConfig(float variation) throws IOException {
@@ -77,6 +99,7 @@ final class GameConfigTest {
                   <lighting sunIntensity="1"/>
                   <grass density="1" distance="10" flowers="0"/>
                   <rocks density="0" sizeScale="1"/>
+                  <trees density="0.45" detailDistance="180"/>
                   <clouds enabled="false" altitude="1" thickness="1" coverage="0" density="0.01"
                           windSpeed="0" tileMeters="1" textureSize="256" steps="8" lightSteps="1"/>
                 </gameConfig>

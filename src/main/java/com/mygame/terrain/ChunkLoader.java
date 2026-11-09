@@ -43,14 +43,20 @@ public final class ChunkLoader {
     private record GrassResult(long key, int generation, TerrainChunk.GrassData data) {
     }
 
+    private record TreeResult(long key, int generation, int lod, TreeShape.Meshes data, boolean successful) {
+    }
+
     private final int renderDistance, maxNewChunksPerFrame, maxInFlight;
     private final int grassRadius, maxGrassInFlight, maxGrassBuildsPerFrame;
+    private final int maxTreesInFlight;
     private final GameConfig config;
     private final Node terrainNode;
     private final Camera camera;
     private final Material material;
     private final Material grassMaterial;
     private final Material rockMaterial;
+    private final Material barkMaterial;
+    private final Material leavesMaterial;
     private final VertexBuffer sharedIndices;
     private final ExecutorService executor;
 
@@ -69,6 +75,8 @@ public final class ChunkLoader {
     private final Queue<Long> grassQueue = new ArrayDeque<>();
     private final ConcurrentLinkedQueue<GrassResult> grassReady = new ConcurrentLinkedQueue<>();
     private boolean grassDirty = true;
+    private final Map<Long, Integer> treePending = new HashMap<>();
+    private final ConcurrentLinkedQueue<TreeResult> treeReady = new ConcurrentLinkedQueue<>();
 
     /**
      * Creates the worker pool and loader for the supplied terrain scene and validated settings.
@@ -78,16 +86,21 @@ public final class ChunkLoader {
      * @param material terrain material
      * @param grassMaterial grass material
      * @param rockMaterial rock material
+     * @param barkMaterial tree trunk and branch material
+     * @param leavesMaterial foliage material
      * @param generator seeded terrain generator
      * @param config runtime settings controlling streaming and geometry
      */
     public ChunkLoader(Node terrainNode, Camera camera, Material material, Material grassMaterial,
-                       Material rockMaterial, TerrainGenerator generator, GameConfig config) {
+                       Material rockMaterial, Material barkMaterial, Material leavesMaterial,
+                       TerrainGenerator generator, GameConfig config) {
         this.terrainNode = terrainNode;
         this.camera = camera;
         this.material = material;
         this.grassMaterial = grassMaterial;
         this.rockMaterial = rockMaterial;
+        this.barkMaterial = barkMaterial;
+        this.leavesMaterial = leavesMaterial;
         this.generator = generator;
         this.config = config;
         this.renderDistance = config.renderDistance;
@@ -99,6 +112,7 @@ public final class ChunkLoader {
         this.grassRadius = Math.min(renderDistance, (int) Math.ceil(config.grassDistance / config.chunkSize));
         this.maxGrassInFlight = threads * 2;
         this.maxGrassBuildsPerFrame = Math.max(1, maxNewChunksPerFrame / 2);
+        this.maxTreesInFlight = Math.max(1, threads);
         final AtomicInteger n = new AtomicInteger();
         this.executor = Executors.newFixedThreadPool(threads, r -> {
             Thread t = new Thread(r, "ChunkWorker-" + n.incrementAndGet());
@@ -132,6 +146,7 @@ public final class ChunkLoader {
 
         drainReady(cx, cz);
         drainGrassReady(cx, cz);
+        drainTreeReady();
 
         // Recalculate the region only when the camera enters a different chunk, including after teleporting.
         if (dirty || cx != lastCx || cz != lastCz) {
@@ -149,8 +164,9 @@ public final class ChunkLoader {
             grassDirty = false;
             rebuildGrassQueue(cx, cz);
         }
-        submitRequests();
+        submitRequests(location);
         submitGrassRequests();
+        submitTreeRequests(location);
     }
 
     private void drainReady(int cx, int cz) {
@@ -162,11 +178,16 @@ public final class ChunkLoader {
             if (r.data == null) continue;
             int x = unpackX(r.key), z = unpackZ(r.key);
             if (!inRange(x, z, cx, cz)) continue;    // the camera moved away before this result was ready
-            TerrainChunk chunk = new TerrainChunk(x, z, r.data, material, rockMaterial, sharedIndices,
-                    config.chunkSize);
+            TerrainChunk chunk = new TerrainChunk(x, z, r.data, material, rockMaterial,
+                    barkMaterial, leavesMaterial, sharedIndices, config.chunkSize);
             loaded.put(r.key, chunk);
             terrainNode.attachChild(chunk.getGeometry());
             if (chunk.getRockGeometry() != null) terrainNode.attachChild(chunk.getRockGeometry());
+            if (chunk.getBarkGeometry() != null) terrainNode.attachChild(chunk.getBarkGeometry());
+            if (chunk.getLeavesGeometry() != null) terrainNode.attachChild(chunk.getLeavesGeometry());
+            LOG.debug("Loaded tree meshes for chunk ({}, {}) at LOD {}: bark vertices={}, foliage vertices={}",
+                    x, z, chunk.getTreeLod(), vertexCount(chunk.getBarkGeometry()),
+                    vertexCount(chunk.getLeavesGeometry()));
             grassDirty = true;
             built++;
         }
@@ -180,6 +201,7 @@ public final class ChunkLoader {
                 e.getValue().getGeometry().removeFromParent();
                 if (e.getValue().getRockGeometry() != null) e.getValue().getRockGeometry().removeFromParent();
                 e.getValue().clearGrass();
+                e.getValue().clearTrees();
                 it.remove();
             }
         }
@@ -201,6 +223,78 @@ public final class ChunkLoader {
             Geometry grass = chunk.buildGrass(r.data, grassMaterial);
             if (grass != null) terrainNode.attachChild(grass);
             built++;
+        }
+    }
+
+    private void drainTreeReady() {
+        TreeResult result;
+        while ((result = treeReady.poll()) != null) {
+            if (result.generation != generation) continue;
+            Integer pendingLod = treePending.get(result.key);
+            if (pendingLod != null && pendingLod == result.lod) treePending.remove(result.key);
+            TerrainChunk chunk = loaded.get(result.key);
+            if (chunk == null || treeLodForChunk(chunk.getChunkX(), chunk.getChunkZ(), camera.getLocation())
+                    != result.lod || !result.successful) {
+                continue;
+            }
+            chunk.updateTrees(result.data, result.lod);
+            if (chunk.getBarkGeometry() != null) terrainNode.attachChild(chunk.getBarkGeometry());
+            if (chunk.getLeavesGeometry() != null) terrainNode.attachChild(chunk.getLeavesGeometry());
+            LOG.debug("Updated tree detail for chunk ({}, {}) to LOD {}: bark vertices={}, foliage vertices={}",
+                    chunk.getChunkX(), chunk.getChunkZ(), result.lod,
+                    vertexCount(chunk.getBarkGeometry()), vertexCount(chunk.getLeavesGeometry()));
+        }
+    }
+
+    private static int vertexCount(Geometry geometry) {
+        return geometry == null ? 0 : geometry.getMesh().getVertexCount();
+    }
+
+    private int treeLodForChunk(int chunkX, int chunkZ, Vector3f cameraLocation) {
+        double centerX = ((double) chunkX + 0.5) * config.chunkSize;
+        double centerZ = ((double) chunkZ + 0.5) * config.chunkSize;
+        double dx = centerX - cameraLocation.x, dz = centerZ - cameraLocation.z;
+        return dx * dx + dz * dz <= config.treeDetailDistance * config.treeDetailDistance
+                ? TreeShape.LOD_HIGH : TreeShape.LOD_LOW;
+    }
+
+    private void submitTreeRequests(Vector3f cameraLocation) {
+        if (config.treeDensity <= 0f || treePending.size() >= maxTreesInFlight) return;
+        List<TerrainChunk> candidates = new ArrayList<>();
+        for (TerrainChunk chunk : loaded.values()) {
+            int lod = treeLodForChunk(chunk.getChunkX(), chunk.getChunkZ(), cameraLocation);
+            long key = pack(chunk.getChunkX(), chunk.getChunkZ());
+            if (chunk.getTreeLod() != lod && !treePending.containsKey(key)) candidates.add(chunk);
+        }
+        candidates.sort(Comparator.comparingDouble(chunk -> {
+            double dx = ((double) chunk.getChunkX() + 0.5) * config.chunkSize - cameraLocation.x;
+            double dz = ((double) chunk.getChunkZ() + 0.5) * config.chunkSize - cameraLocation.z;
+            return dx * dx + dz * dz;
+        }));
+        for (TerrainChunk chunk : candidates) {
+            if (treePending.size() >= maxTreesInFlight) break;
+            int x = chunk.getChunkX(), z = chunk.getChunkZ();
+            long key = pack(x, z);
+            int lod = treeLodForChunk(x, z, cameraLocation);
+            treePending.put(key, lod);
+            int gen = generation;
+            TerrainGenerator treeGenerator = generator;
+            float[] heights = chunk.getHeights();
+            int heightSide = chunk.getHeightSide();
+            int size = config.chunkSize, subdivisions = config.subdivisions;
+            float waterHeight = config.waterHeight, density = config.treeDensity;
+            executor.execute(() -> {
+                TreeShape.Meshes data = null;
+                boolean successful = true;
+                try {
+                    data = TerrainChunk.generateTrees(x, z, treeGenerator, heights, heightSide, size,
+                            subdivisions, waterHeight, density, lod);
+                } catch (RuntimeException e) {
+                    successful = false;
+                    LOG.error("Failed to generate trees for chunk ({}, {}) at LOD {}", x, z, lod, e);
+                }
+                treeReady.add(new TreeResult(key, gen, lod, data, successful));
+            });
         }
     }
 
@@ -271,7 +365,7 @@ public final class ChunkLoader {
         requestQueue.addAll(missing);
     }
 
-    private void submitRequests() {
+    private void submitRequests(Vector3f cameraLocation) {
         while (pending.size() < maxInFlight && !requestQueue.isEmpty()) {
             final long key = requestQueue.poll();
             pending.add(key);
@@ -281,10 +375,13 @@ public final class ChunkLoader {
             final int size = config.chunkSize, sub = config.subdivisions;
             final float waterH = config.waterHeight;
             final float rockDensity = config.rockDensity, rockScale = config.rockSizeScale;
+            final float treeDensity = config.treeDensity;
+            final int treeLod = treeLodForChunk(x, z, cameraLocation);
             executor.execute(() -> {
                 TerrainChunk.Data data = null;
                 try {
-                    data = TerrainChunk.generate(x, z, gen3d, size, sub, waterH, rockDensity, rockScale);
+                    data = TerrainChunk.generate(x, z, gen3d, size, sub, waterH,
+                            rockDensity, rockScale, treeDensity, treeLod);
                 } catch (Throwable t) {
                     LOG.error("Failed to generate chunk ({}, {})", x, z, t);
                 }
@@ -307,6 +404,8 @@ public final class ChunkLoader {
         grassReady.clear();
         grassPending.clear();
         grassQueue.clear();
+        treeReady.clear();
+        treePending.clear();
         terrainNode.detachAllChildren();
         loaded.clear();
         generator = newGenerator;
